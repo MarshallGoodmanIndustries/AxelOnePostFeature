@@ -11,8 +11,10 @@ app.use(bodyParser.json());
 // Routes
 app.use('/api', postRouter);
 
+mongoose.connect('mongodb://localhost:27017/axeloneposts');
+
 // Connect to MongoDB
-mongoose.connect('mongodb://localhost:27017/axeloneposts').then(() => {
+mongoose.connect("mongodb+srv://bellsehr:password1234@bellsehr.bwuj4eh.mongodb.net/?retryWrites=true&w=majority").then(() => {
     console.log('Connected to MongoDB');
 }).catch(err => {
     console.error('Could not connect to MongoDB', err);
