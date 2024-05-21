@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Document</title>
+</head>
+
+<body>
+
+  <script>
+    const endpoint = 'https://api.fyndah.com/api/v1/auth/users';
+
+    const handleRegistration = async (firstname, lastname, email, username, password, password_confirmation) => {
+      const data = {
+        firstname: firstname,
+        lastname: lastname,
+        email: email,
+        username: username,
+        password: password,
+        password_confirmation: password_confirmation
+      };
+
+      const options = {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(data)
+      };
+
+      try {
+        const response = await fetch(endpoint, options);
+        const jsonResponse = await response.json();
+
+        if (response.ok) {
+          console.log('Registration successful');
+          // Handle successful registration
+        } else {
+          console.error('Failed to register:', jsonResponse.message);
+          // Handle registration error
+        }
+      } catch (error) {
+        console.error('Error registering user:', error);
+      }
+    };
+
+
+    handleRegistration('pat', 'Doe', 'patdoe@example.com', 'patdoe', 'password', 'password');
+
+
+  </script>
+</body>
+
+</html>
