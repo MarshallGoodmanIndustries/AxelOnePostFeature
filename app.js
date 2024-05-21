@@ -11,7 +11,7 @@ app.use(bodyParser.json());
 // Routes
 app.use('/api', postRouter);
 
-mongoose.connect('mongodb://localhost:27017/axeloneposts');
+// mongoose.connect('mongodb://localhost:27017/axeloneposts');
 
 // Connect to MongoDB
 mongoose.connect("mongodb+srv://bellsehr:password1234@bellsehr.bwuj4eh.mongodb.net/?retryWrites=true&w=majority").then(() => {
