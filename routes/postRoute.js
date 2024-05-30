@@ -1,31 +1,29 @@
 const express = require('express');
 const router = express.Router();
-const authenticate = require('../middleware/authenticate');
-const checkOrganization = require('../middleware/authenticate');
+const { authenticate, checkOrganization } = require('../middleware/authenticate');
 const upload = require('../middleware/multerConfig');
 const Post = require('../models/post');
-const Comment = require('../models/comments')
+const Comment = require('../models/comments');
 
-
-//create post
-router.post('/post', authenticate, upload.single('image'), async (req, res) => {
+// Create post
+router.post('/post', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
     try {
         const { title, description, organizationId } = req.body;
-        console.log('req.user.email', req.user.email, req.user.id, req.user.username)
+        console.log('req.user.email', req.user.email, req.user.id, req.user.username);
+
         // Debug log to check req.user
         console.log('req.user before creating post:', req.user.email);
 
-      
         // Create new post
         const newPost = new Post({
             title,
             description,
-            organization: organizationId, 
+            organization: organizationId,
             author: req.user.id,
             authorEmail: req.user.email,
             authorUsername: req.user.username
         });
-       
+
         await newPost.save();
 
         res.status(201).json({ status: 'success', data: { post: newPost } });
@@ -35,17 +33,9 @@ router.post('/post', authenticate, upload.single('image'), async (req, res) => {
     }
 });
 
-//get post
-router.get('/homePage', async (req, res) => {
-    try{
-        const posts = await Post.find().populate('comments');
-        res.status(200).json({ status: "success", data: { posts } });
-    } catch (err)
-    {console.log(err)} 
-});
 
 //edit post
-router.put('/post/:postId', authenticate,  async (req, res) => {
+router.put('/post/:postId', authenticate, checkOrganization,  async (req, res) => {
     try {
         const postId = req.params.postId;
         const { title, description } = req.body;
@@ -77,7 +67,7 @@ router.put('/post/:postId', authenticate,  async (req, res) => {
 });
 
 //delete post
-router.delete('/post/:postId', authenticate,  async (req, res) => {
+router.delete('/post/:postId', authenticate, checkOrganization,  async (req, res) => {
     try {
         const postId = req.params.postId;
 
@@ -102,6 +92,18 @@ router.delete('/post/:postId', authenticate,  async (req, res) => {
         console.error(error);
         res.status(500).json({ status: 'error', message: 'Internal server error' });
     }
+});
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////////////////
+
+//get post
+router.get('/homePage', async (req, res) => {
+    try{
+        const posts = await Post.find().populate('comments');
+        res.status(200).json({ status: "success", data: { posts } });
+    } catch (err)
+    {console.log(err)} 
 });
 
 //comment on a post

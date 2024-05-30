@@ -1,7 +1,6 @@
 const express = require('express');
 const router = express.Router();
-const authenticate = require('../middleware/authenticate');
-const checkOrganization = require('../middleware/authenticate');
+const { authenticate, checkOrganization } = require('../middleware/authenticate');
 const upload = require('../middleware/multerConfig');
 const Comment = require('../models/comments')
 const Listing = require("../models/listing")
