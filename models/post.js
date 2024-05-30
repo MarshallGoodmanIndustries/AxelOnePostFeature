@@ -16,9 +16,21 @@ const postSchema = new mongoose.Schema({
         type: String,
         required: true
     },
+    authorEmail: {
+        type: String,
+        required: true
+    },
+    authorUsername: {
+        type: String,
+        required: true
+    },
     comments:[{
         type: mongoose.Schema.Types.ObjectId,
         ref: "Comment" // Ensure this matches the model name of your Comment model
+    }],
+    likes: [{
+        type: Number,
+        required: true
     }],
     createdAt: {
         type: Date,

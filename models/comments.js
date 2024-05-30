@@ -10,6 +10,11 @@ const CommentSchema = new mongoose.Schema(
         ref: "Post",
         required: true
     }],
+    listing:[{
+      type: mongoose.Schema.Types.ObjectId,
+      ref: "Listing",
+      required: true
+  }],
     comment:{
       type: String,
       required: true

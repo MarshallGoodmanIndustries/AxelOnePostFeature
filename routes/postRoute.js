@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const authenticate = require('../middleware/authenticate');
+const checkOrganization = require('../middleware/authenticate');
 const upload = require('../middleware/multerConfig');
 const Post = require('../models/post');
 const Comment = require('../models/comments')
@@ -9,8 +10,8 @@ const Comment = require('../models/comments')
 //create post
 router.post('/post', authenticate, upload.single('image'), async (req, res) => {
     try {
-        const { title, description } = req.body;
-        console.log('req.user.email', req.user.email)
+        const { title, description, organizationId } = req.body;
+        console.log('req.user.email', req.user.email, req.user.id, req.user.username)
         // Debug log to check req.user
         console.log('req.user before creating post:', req.user.email);
 
@@ -19,7 +20,10 @@ router.post('/post', authenticate, upload.single('image'), async (req, res) => {
         const newPost = new Post({
             title,
             description,
-            author: req.user.email
+            organization: organizationId, 
+            author: req.user.id,
+            authorEmail: req.user.email,
+            authorUsername: req.user.username
         });
        
         await newPost.save();
@@ -41,7 +45,7 @@ router.get('/homePage', async (req, res) => {
 });
 
 //edit post
-router.put('/post/:postId', authenticate, async (req, res) => {
+router.put('/post/:postId', authenticate,  async (req, res) => {
     try {
         const postId = req.params.postId;
         const { title, description } = req.body;
@@ -55,7 +59,7 @@ router.put('/post/:postId', authenticate, async (req, res) => {
         }
 
         // Check if the current user is the author of the post
-        if (post.author !== req.user.email) {
+        if (post.author !== req.user.id) {
             return res.status(403).json({ status: 'error', message: 'You are not authorized to edit this post' });
         }
 
@@ -73,7 +77,7 @@ router.put('/post/:postId', authenticate, async (req, res) => {
 });
 
 //delete post
-router.delete('/post/:postId', authenticate, async (req, res) => {
+router.delete('/post/:postId', authenticate,  async (req, res) => {
     try {
         const postId = req.params.postId;
 
@@ -86,7 +90,7 @@ router.delete('/post/:postId', authenticate, async (req, res) => {
         }
 
         // Check if the current user is the author of the post
-        if (post.author !== req.user.email) {
+        if (post.author !== req.user.id) {
             return res.status(403).json({ status: 'error', message: 'You are not authorized to delete this post' });
         }
 
@@ -136,7 +140,7 @@ router.patch('/comment/edit/:commentId', authenticate, async (req, res) => {
         }
 
         // Check if the current user is the author of the comment
-        if (comment.author !== req.user.email) {
+        if (comment.author !== req.user.id) {
             return res.status(403).json({ status: 'error', message: 'You are not authorized to edit this comment' });
         }
 
@@ -165,7 +169,7 @@ router.delete("/comment/delete/:commentId", authenticate, async(req, res) => {
         }
 
         // Check if the current user is the author of the comment
-        if (comment.author !== req.user.email) {
+        if (comment.author !== req.user.id) {
             return res.status(403).json({ status: 'error', message: 'You are not authorized to delete this comment' });
         }
 
@@ -178,7 +182,58 @@ router.delete("/comment/delete/:commentId", authenticate, async(req, res) => {
         console.log(err)
         res.status(401).json({status:"success", message: "internal server error. Could not delete comment"})
     }
-})
+});
+
+//like a post
+router.post('/post/:id/like', authenticate, async (req, res) => {
+    try {
+        const post = await Post.findById(req.params.id);
+
+        if (!post) {
+            return res.status(404).json({ status: 'error', message: 'Post not found' });
+        }
+
+        // Check if user has already liked the Post
+        if (post.likes.includes(req.user.id)) {
+            return res.status(400).json({ status: 'error', message: 'You have already liked this post' });
+        }
+
+        // Add user ID to likes array
+        post.likes.push(req.user.id);
+        await post.save();
+
+        res.status(200).json({ status: 'success', data: post });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ status: 'error', message: 'Internal server error' });
+    }
+});
+// Unlike a post
+router.post('/post/:id/unlike', authenticate, async (req, res) => {
+    try {
+        const post = await Post.findById(req.params.id);
+
+        if (!post) {
+            return res.status(404).json({ status: 'error', message: 'Post not found' });
+        }
+
+        // Check if user has not liked the post
+        if (!post.likes.includes(req.user.id)) {
+            return res.status(400).json({ status: 'error', message: 'You have not liked this post' });
+        }
+
+        // Remove user ID from likes array
+        post.likes = post.likes.filter(id => id.toString() !== req.user.id.toString());
+        await post.save();
+
+        res.status(200).json({ status: 'success', data: post });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ status: 'error', message: 'Internal server error' });
+    }
+});
+
+
 
 
 module.exports = router;
