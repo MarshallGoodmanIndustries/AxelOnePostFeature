@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, checkOrganization } = require('../middleware/authenticate');
-const upload = require('../middleware/multerConfig');
+const { upload } = require('../util/cloudinaryConfig');
 const Post = require('../models/post');
 const Comment = require('../models/comments');
 
