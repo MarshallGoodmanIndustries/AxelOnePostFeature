@@ -10,7 +10,12 @@ const postSchema = new mongoose.Schema({
         required: true
     },
     image: {
-        type: String
+        type: String,
+        required: true
+    },
+    organizationId: {
+        type: String,
+        required: true
     },
     author: {
         type: String,

@@ -14,14 +14,21 @@ router.post('/post', authenticate, checkOrganization, upload.single('image'), as
         // Debug log to check req.user
         console.log('req.user before creating post:', req.user.email);
 
+        // Optional image handling
+        let imageUrl = '';
+        if (req.file) {
+            imageUrl = req.file.path; // Assuming you're saving the path to the uploaded image
+        }
+
         // Create new post
         const newPost = new Post({
             title,
             description,
-            organization: organizationId,
+            organizationId,
             author: req.user.id,
             authorEmail: req.user.email,
-            authorUsername: req.user.username
+            authorUsername: req.user.username,
+            image: imageUrl // Add image URL to the post document
         });
 
         await newPost.save();

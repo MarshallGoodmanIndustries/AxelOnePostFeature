@@ -13,7 +13,7 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 //create post
-router.post('/listing', authenticate, upload.single('image'), async (req, res) => {
+router.post('/listing', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
     try {
         const { title, description, contactEmail, contactPhone, type, location, status } = req.body;
         console.log('req.user.email', req.user.email, req.user.id, req.user.username)
@@ -54,7 +54,7 @@ router.get('/homePage', async (req, res) => {
 });
 
 //edit post
-router.put('/listing/:listingId', authenticate, async (req, res) => {
+router.put('/listing/:listingId', authenticate, checkOrganization, async (req, res) => {
     try {
         const listingId = req.params.listingId;
         const { title, description, contactPhone, type, location, status} = req.body;
@@ -90,7 +90,7 @@ router.put('/listing/:listingId', authenticate, async (req, res) => {
 });
 
 //delete post
-router.delete('/listing/:listingId', authenticate, async (req, res) => {
+router.delete('/listing/:listingId', authenticate, checkOrganization, async (req, res) => {
     try {
         const listingId = req.params.listingId;
 
