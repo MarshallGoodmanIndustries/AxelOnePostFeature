@@ -1,8 +1,11 @@
 const express = require('express');
 const router = express.Router();
 const { authenticate, checkOrganization } = require('../middleware/authenticate');
-const { upload } = require('../util/cloudinaryConfig');
+const multer = require('multer');
+const { storage } = require('../middleware/multerConfig'); // Adjust the path as necessary
+const upload = multer({ storage });
 const Post = require('../models/post');
+const Listings = require('../models/listing'); // Adjust the path as necessary
 const Comment = require('../models/comments');
 
 // Create post
@@ -10,21 +13,22 @@ router.post('/post', authenticate, checkOrganization, upload.single('image'), as
     try {
         const { title, description, organizationId } = req.body;
         console.log('req.user.email', req.user.email, req.user.id, req.user.username);
-
+        
         // Debug log to check req.user
         console.log('req.user before creating post:', req.user.email);
-
+        console.log('Request Body:', req.body);
+        
         // Optional image handling
         let imageUrl = '';
         if (req.file) {
-            imageUrl = req.file.path; // Assuming you're saving the path to the uploaded image
+            imageUrl = req.file.path; // Cloudinary URL
         }
 
         // Create new post
         const newPost = new Post({
             title,
             description,
-            organizationId,
+            organization: organizationId,
             author: req.user.id,
             authorEmail: req.user.email,
             authorUsername: req.user.username,
@@ -106,11 +110,25 @@ router.delete('/post/:postId', authenticate, checkOrganization,  async (req, res
 
 //get post
 router.get('/homePage', async (req, res) => {
-    try{
-        const posts = await Post.find().populate('comments');
-        res.status(200).json({ status: "success", data: { posts } });
-    } catch (err)
-    {console.log(err)} 
+    try {
+        // Querying posts and populating comments and likes
+        const posts = await Post.find().populate('comments likes');
+        
+        // Querying listings
+        const listings = await Listings.find();
+        
+        // Sending both posts and listings in the response
+        res.status(200).json({ 
+            status: "success", 
+            data: { 
+                posts, 
+                listings 
+            } 
+        });
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ status: "error", message: "Internal Server Error" });
+    }
 });
 
 //comment on a post
