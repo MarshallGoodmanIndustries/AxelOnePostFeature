@@ -13,7 +13,7 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 //create post
-router.post('/listing', authenticate, upload.single('image'), async (req, res) => {
+router.post('/listing', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
     try {
         const { title, description, contactEmail, contactPhone, type, location, status } = req.body;
         console.log('req.user.email', req.user.email, req.user.id, req.user.username)
@@ -193,76 +193,6 @@ router.post('/comment/listing/:listingId', authenticate, async (req, res) => {
 //Customer Reviews a listing after purchase
 
 //Buy Now
-
-//////////////////////////////////////////
-// Direct Message an Org
-///////////////////////////////////////////
-
-
-router.get('/messages/:listingId', async (req, res) => {
-    const { listingId } = req.params;
-    const messages = await Message.find({ listingId }).sort({ timestamp: 1 });
-    res.json(messages);
-  });
-
-
-//socket io connection
-io.on("connection", (socket) => {
-    console.log("New client connected");
-
-    socket.on("join", ({listingId, userId}) => {
-        socket.join(listingId);
-        console.log(`${userId} joined ${listingId}`);
-    });
-
-    socket.on("sendMessage", async ({sender, recipient, listingId, messageId}) =>{
-        const newMessage = new Message ({sender, recipient, listingId, message});
-
-        await newMessage.save();
-
-        io.to(listingId).emit("recievedMessage", newMessage);
-    })
-
-    socket.on("disconnect", () => {
-        console.log("client disconnected");
-    })
-
-})
-
-
-// Apply middleware to chat routes
-app.use('/messages', authenticate);
-io.use((socket, next) => {
-    const token = socket.handshake.query.token;
-    if (token) {
-        jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-            if (err) {
-                return next(new Error('Authentication error'));
-            }
-            socket.user = user;
-            next();
-        });
-    } else {
-        next(new Error('Authentication error'));
-    }
-});
-
-router.post('/send-message', async (req, res) => {
-    const { sender, recipient, listingId, message } = req.body;
-    if (!sender || !recipient || !listingId || !message) {
-      return res.status(400).json({ error: 'All fields are required' });
-    }
-    try {
-      const newMessage = new Message({ sender, recipient, listingId, message });
-      await newMessage.save();
-      io.to(listingId).emit('receiveMessage', newMessage); // This broadcasts the message in real-time
-      res.status(200).json(newMessage);
-    } catch (err) {
-      res.status(500).json({ error: 'Something went wrong' });
-    }
-  });
-  
-
 
 
 module.exports = router;

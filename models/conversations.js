@@ -1,13 +1,11 @@
 const mongoose = require('mongoose');
 
-const conversationSchema = new mongoose.Schema({
-    members : {
+const ConversationSchema = new mongoose.Schema({
+    members: {
         type: Array,
     },
-    
-},
- { timestamps: true }
+    lastMessage: { type: mongoose.Schema.Types.ObjectId, ref: 'Message' },
+    updatedAt: { type: Date, default: Date.now }
+});
 
-);
-
-module.exports = mongoose.model('Conversation', conversationSchema);
+module.exports = mongoose.model('Conversation', ConversationSchema);
