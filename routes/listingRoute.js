@@ -166,11 +166,11 @@ router.post('/listings/:id/unlike', authenticate, async (req, res) => {
 });
 
 //Comment on a Listing
-router.post('/comment/:listingId', authenticate, async (req, res) => {
+router.post('/comment/listing/:listingId', authenticate, async (req, res) => {
     try{
 
         // Find the listing the comment is to be associated with
-        const listing = await Listing.findById(req.params.postId);
+        const listing = await Listing.findById(req.params.listingId);
         if (!listing) {
             return res.status(404).json({ status: 'error', message: 'Listing not found' });
         }
