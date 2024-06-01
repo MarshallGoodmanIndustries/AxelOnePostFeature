@@ -115,7 +115,7 @@ router.get('/homePage', async (req, res) => {
         const posts = await Post.find().populate('comments likes');
         
         // Querying listings
-        const listings = await Listings.find();
+        const listings = await Listings.find().populate('comments');
         
         // Sending both posts and listings in the response
         res.status(200).json({ 

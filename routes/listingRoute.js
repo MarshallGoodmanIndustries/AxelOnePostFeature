@@ -13,14 +13,18 @@ const server = http.createServer(app);
 const io = socketIo(server);
 
 //create post
-router.post('/listing', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
+router.post('/listing', authenticate, upload.single('image'), async (req, res) => {
     try {
         const { title, description, contactEmail, contactPhone, type, location, status } = req.body;
         console.log('req.user.email', req.user.email, req.user.id, req.user.username)
         // Debug log to check req.user
         console.log('req.user before creating listing:', req.user.email);
 
-      
+        let imageUrl = '';
+        if (req.file) {
+            imageUrl = req.file.path; // Cloudinary URL
+        }
+
         // Create new post
         const newListing = new Listing({
             title,
@@ -32,7 +36,9 @@ router.post('/listing', authenticate, checkOrganization, upload.single('image'),
             contactPhone, 
             type, 
             location, 
-            status
+            status,
+            image: imageUrl // Add image URL to the post document
+
         });
        
         await newListing.save();
@@ -42,15 +48,6 @@ router.post('/listing', authenticate, checkOrganization, upload.single('image'),
         console.error(error);
         res.status(500).json({ status: 'error', message: 'Internal server error' });
     }
-});
-
-//get post
-router.get('/homePage', async (req, res) => {
-    try{
-        const listings = await Listing.find().populate('comments');
-        res.status(200).json({ status: "success", data: { listings } });
-    } catch (err)
-    {console.log(err)} 
 });
 
 //edit post
@@ -90,7 +87,7 @@ router.put('/listing/:listingId', authenticate, checkOrganization, async (req, r
 });
 
 //delete post
-router.delete('/listing/:listingId', authenticate, checkOrganization, async (req, res) => {
+router.delete('/listing/:listingId', authenticate, async (req, res) => {
     try {
         const listingId = req.params.listingId;
 
