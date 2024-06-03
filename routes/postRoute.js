@@ -7,6 +7,11 @@ const upload = multer({ storage });
 const Post = require('../models/post');
 const Listings = require('../models/listing'); // Adjust the path as necessary
 const Comment = require('../models/comments');
+//fetch one post
+const WebSocket = require('ws');
+
+// Create a WebSocket server
+const wss = new WebSocket.Server({ port: 8080});
 
 // Create post
 router.post('/post', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
@@ -155,6 +160,19 @@ router.post('/comment/:postId', authenticate, async (req, res) => {
     }
 });
 
+router.get('/comments/:postId', async (req, res) => {
+    try {
+        const postId = req.params.postId;
+
+        // Query comments associated with the specified post
+        const comments = await Comment.find({ post: postId });
+
+        res.status(200).json({ status: 'success', data: { comments } });
+    } catch (error) {
+        console.error(error);
+        res.status(500).json({ status: 'error', message: 'Internal server error' });
+    }
+});
 //edit a comment
 router.patch('/comment/edit/:commentId', authenticate, async (req, res) => {
     try {
@@ -183,6 +201,49 @@ router.patch('/comment/edit/:commentId', authenticate, async (req, res) => {
     }
 });
 
+//////websockets///////////////////
+// Handle WebSocket connections
+wss.on('connection', function connection(ws) {
+    console.log('Client connected');
+});
+
+async function saveCommentToDatabase(commentData) {
+    try {
+        // Create a new instance of the Comment model with the provided data
+        const newComment = new Comment(commentData);
+        
+        // Save the new comment to the database
+        await newComment.save();
+        
+        // Return the saved comment
+        return newComment;
+    } catch (error) {
+        // Handle any errors that occur during the saving process
+        throw new Error('Failed to save comment to the database');
+    }
+}
+
+// Your route to handle comment addition
+router.post('/comments/:postId', authenticate, async(req, res) => {
+    try {
+        // Add your logic to save the comment to the database
+        const newComment = await saveCommentToDatabase(req.body);
+
+        // Broadcast the new comment to all connected clients
+        wss.clients.forEach(function each(client) {
+            if (client.readyState === WebSocket.OPEN) {
+                client.send(JSON.stringify(newComment));
+            }
+        });
+
+        res.status(200).json({ status: "success", data: { comment: newComment } });
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ status: "error", message: "Internal Server Error" });
+    }
+});
+
+//////websockets///////////////////
 
 //delete a comment
 router.delete("/comment/delete/:commentId", authenticate, async(req, res) => {
