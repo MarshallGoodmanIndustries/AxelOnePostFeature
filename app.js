@@ -1,17 +1,18 @@
-// server.js
 const express = require('express');
 const cors = require('cors');
 const mongoose = require('mongoose');
 const bodyParser = require('body-parser');
+const dotenv = require('dotenv');
+const http = require('http');
+const socketIo = require('socket.io');
+const jwt = require('jsonwebtoken');
 const postRouter = require('./routes/postRoute'); // Adjust path accordingly
 const listingRouter = require('./routes/listingRoute'); // Adjust path accordingly
 const conversationRouter = require('./routes/conversations');
 const messageRouter = require('./routes/messages');
-const http = require('http');
-const socketIo = require('socket.io');
-const jwt = require('jsonwebtoken');
+const socketAuthenticate = require('./middleware/socketAuthenticate'); 
 
-const authenticate = require('./middleware/authenticate'); // Your auth middleware
+dotenv.config(); // Load environment variables
 
 const app = express();
 const server = http.createServer(app);
@@ -32,28 +33,16 @@ app.use('/api/conversations', conversationRouter);
 app.use('/api/messages', messageRouter);
 
 // Connect to MongoDB
-mongoose.connect('mongodb+srv://bellsehr:password1234@bellsehr.bwuj4eh.mongodb.net/?retryWrites=true&w=majority').then(() => {
+mongoose.connect(process.env.MONGO_URI).then(() => {
     console.log('Connected to MongoDB');
 }).catch(err => {
     console.error('Could not connect to MongoDB', err);
 });
 
-// Socket.IO setup
-io.use((socket, next) => {
-    const token = socket.handshake.query.token;
-    if (token) {
-        jwt.verify(token, process.env.JWT_SECRET, (err, user) => {
-            if (err) {
-                return next(new Error('Authentication error'));
-            }
-            socket.user = user;
-            next();
-        });
-    } else {
-        next(new Error('Authentication error'));
-    }
-});
+// Socket.IO authentication middleware
+io.use(socketAuthenticate);
 
+// Socket.IO connection handler
 io.on('connection', (socket) => {
     console.log('A user connected', socket.id);
 
@@ -75,18 +64,9 @@ io.on('connection', (socket) => {
 
 // Start the server
 const PORT = process.env.PORT || 3000;
-app.listen(PORT, () => {
+server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
-
-
-
-
-
-
-
-
-
 
 
 

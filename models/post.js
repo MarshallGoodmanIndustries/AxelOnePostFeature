@@ -13,20 +13,16 @@ const postSchema = new mongoose.Schema({
         type: String
     },
     organization: {
-        type: String,
-        required: true
+        type: String
     },
     author: {
-        type: String,
-        required: true
+        type: String
     },
     authorEmail: {
-        type: String,
-        required: true
+        type: String
     },
     authorUsername: {
-        type: String,
-        required: true
+        type: String
     },
     comments:[{
         type: mongoose.Schema.Types.ObjectId,
