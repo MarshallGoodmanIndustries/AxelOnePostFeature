@@ -1,12 +1,8 @@
-// /routes/messages.js
 const express = require('express');
 const router = express.Router();
 const Message = require('../models/message');
-const authenticate = require('../middleware/authenticate'); // Your auth middleware
+const authenticate = require('../middleware/authentication');
 
-// router.use(authenticate);
-
-// Get messages by conversationId
 router.get('/:conversationId', async (req, res) => {
     try {
         const { conversationId } = req.params;
@@ -27,27 +23,37 @@ router.get('/:conversationId', async (req, res) => {
     }
 });
 
+router.post('/send-message/:recipientId/:conversationId', authenticate, async (req, res) => {
+    const { recipientId, conversationId } = req.params;
+    const { message } = req.body;
 
-
-// Send a message
-router.post('/send-message', async (req, res) => {
-    const { sender, recipient, conversationId, message } = req.body;
-    if (!sender || !recipient || !message || !conversationId) {
-        return res.status(400).json({ error: 'Sender, recipient, and message are required' });
+    if (!message) {
+        console.error('Message is required');
+        return res.status(400).json({ error: 'Message is required' });
     }
+
     try {
-        const newMessageData = { sender, recipient, message };
-        if (conversationId) {
-            newMessageData.conversationId = conversationId;
-        }
-        const newMessage = new Message(newMessageData);
+        const sender = req.user.username;
+        console.log(`Sender: ${sender}, Recipient: ${recipientId}, ConversationId: ${conversationId}, Message: ${message}`);
+
+        const newMessage = new Message({
+            sender,
+            recipient: recipientId,
+            message,
+            conversationId,
+            timestamp: new Date()
+        });
         await newMessage.save();
+
+        const io = req.io;
+        console.log(`Emitting message to room ${conversationId}`);
+        io.to(conversationId).emit('receiveMessage', { sender, message });
+
         res.status(200).json(newMessage);
     } catch (err) {
         console.error('Error saving message:', err);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
 
 module.exports = router;

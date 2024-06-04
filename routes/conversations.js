@@ -3,13 +3,15 @@
 const express = require('express');
 const router = express.Router();
 const Conversation = require('../models/conversations');
-const authenticate = require('../middleware/authenticate'); // Your auth middleware
+const authenticate = require('../middleware/authentication'); // Your auth middleware
 
 // router.use(authenticate);
 
 // Create a new conversation
-router.post('/', async (req, res) => {
-    const { senderId, receiverId } = req.body;
+router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
+    const { receiverId } = req.params;
+    const senderId = String(req.user.id);
+
     if (!senderId || !receiverId) {
         return res.status(400).json({ error: 'Both sender and receiver IDs are required' });
     }
