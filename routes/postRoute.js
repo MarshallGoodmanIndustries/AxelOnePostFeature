@@ -118,15 +118,23 @@ router.get('/homePage', async (req, res) => {
     try {
         // Querying posts and populating comments and likes
         const posts = await Post.find().populate('comments likes');
-        
-        // Querying listings
+
+        // Adding total number of likes for each post
+        const postsWithLikeCount = posts.map(post => {
+            return {
+                ...post._doc,
+                likesCount: post.likes.length
+            };
+        });
+
+        // Querying listings (if needed)
         // const listings = await Listings.find().populate('comments');
-        
+
         // Sending both posts and listings in the response
         res.status(200).json({ 
             status: "success", 
             data: { 
-                posts 
+                posts: postsWithLikeCount 
             } 
         });
     } catch (err) {
