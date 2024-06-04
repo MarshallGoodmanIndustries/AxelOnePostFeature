@@ -31,7 +31,7 @@ router.get('/:conversationId', async (req, res) => {
 
 // Send a message
 router.post('/send-message', async (req, res) => {
-    const { sender, recipient, listingId, conversationId, message } = req.body;
+    const { sender, recipient, conversationId, message } = req.body;
     if (!sender || !recipient || !message || !conversationId) {
         return res.status(400).json({ error: 'Sender, recipient, and message are required' });
     }

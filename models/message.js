@@ -13,14 +13,15 @@ message: {
     type: String,
     required: true
 },
-listingId: {
-    type: String,
-    required: false
-},
+// listingId: {
+//     type: String,
+//     required: false
+// },
 conversationId: {
   type: String
+}
 },
-  timestamp: { type: Date, default: Date.now }
-});
+{ timestamps: true }
+);
 
 module.exports = mongoose.model('Message', messageSchema);

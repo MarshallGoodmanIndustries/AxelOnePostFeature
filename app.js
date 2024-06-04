@@ -5,11 +5,12 @@ const bodyParser = require('body-parser');
 const dotenv = require('dotenv');
 const http = require('http');
 const socketIo = require('socket.io');
-const jwt = require('jsonwebtoken');
 const postRouter = require('./routes/postRoute'); // Adjust path accordingly
 const listingRouter = require('./routes/listingRoute'); // Adjust path accordingly
 const conversationRouter = require('./routes/conversations');
 const messageRouter = require('./routes/messages');
+const Message = require('./models/message');
+const Conversation = require('./models/conversations');
 const socketAuthenticate = require('./middleware/socketAuthenticate'); 
 
 dotenv.config(); // Load environment variables
@@ -43,7 +44,46 @@ mongoose.connect(process.env.MONGO_URI).then(() => {
 io.use(socketAuthenticate);
 
 // Socket.IO connection handler
-io.on('connection', (socket) => {
+
+// io.on('connection', (socket) => {
+//     console.log('A user connected', socket.id);
+
+//     socket.on('joinRoom', ({ roomId, userId }) => {
+//         socket.join(roomId);
+//         console.log(`${userId} joined room: ${roomId}`);
+//         socket.to(roomId).emit('userJoined', { userId });
+//     });
+
+//     socket.on('sendMessage', async ({ roomId, message}, callback) => {
+//         const senderId = socket.user.username; // Get sender ID from authenticated user
+//         console.log(`Message from ${senderId} in room ${roomId}: ${message}`);
+        
+//         // Save the message to the database
+//         try {
+//             const newMessage = new Message({
+//                 sender: senderId,
+//                 message,
+//                 recipient,
+//                 conversationId: roomId,
+//                 timestamp: new Date()
+//             });
+//             await newMessage.save();
+//             // Emit the message to other users in the room
+//             socket.to(roomId).emit('receiveMessage', { sender: senderId, message });
+//             callback(null, { success: true });
+//         } catch (error) {
+//             console.error('Error saving message:', error);
+//             callback(error, { success: false });
+//         }
+//     });
+
+//     socket.on('disconnect', () => {
+//         console.log('A user disconnected', socket.id);
+//     });
+// });
+
+// Socket.IO connection handler
+io.on('connection', async (socket) => {
     console.log('A user connected', socket.id);
 
     socket.on('joinRoom', ({ roomId, userId }) => {
@@ -52,9 +92,28 @@ io.on('connection', (socket) => {
         socket.to(roomId).emit('userJoined', { userId });
     });
 
-    socket.on('sendMessage', async ({ roomId, message, userId }) => {
-        console.log(`Message from ${userId} in room ${roomId}: ${message}`);
-        socket.to(roomId).emit('receiveMessage', { userId, message });
+    socket.on('sendMessage', async ({ roomId, message }, callback) => {
+        const senderId = socket.user.username; // Get sender ID from authenticated user
+        console.log(`Message from ${senderId} in room ${roomId}: ${message}`);
+        
+        try {
+            // Fetch the conversation to get the recipient
+            const conversation = await Conversation.findById(roomId);
+            if (!conversation) {
+                throw new Error('Conversation not found');
+            }
+            
+            const recipient = conversation.members.find(memberId => memberId !== senderId);
+
+            // Call the sendMessage function to handle message sending
+            await sendMessage({ sender: senderId, recipient, conversationId: roomId, message });
+
+            // Emit the message to other users in the room
+            socket.to(roomId).emit('receiveMessage', { sender: senderId, message });
+            callback(null, { success: true });
+        } catch (error) {
+            console.error('Error sending message:', error);
+        }
     });
 
     socket.on('disconnect', () => {
@@ -62,7 +121,9 @@ io.on('connection', (socket) => {
     });
 });
 
-// Start the server
+
+
+
 const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);

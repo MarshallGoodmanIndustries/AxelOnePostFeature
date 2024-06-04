@@ -289,12 +289,13 @@ router.post('/post/:id/like', authenticate, async (req, res) => {
         post.likes.push(req.user.id);
         await post.save();
 
-        res.status(200).json({ status: 'success', data: post });
+        res.status(200).json({ status: 'success', data: { likesCount: post.likes.length }});
     } catch (error) {
         console.error(error);
         res.status(500).json({ status: 'error', message: 'Internal server error' });
     }
 });
+
 // Unlike a post
 router.post('/post/:id/unlike', authenticate, async (req, res) => {
     try {
@@ -313,7 +314,7 @@ router.post('/post/:id/unlike', authenticate, async (req, res) => {
         post.likes = post.likes.filter(id => id.toString() !== req.user.id.toString());
         await post.save();
 
-        res.status(200).json({ status: 'success', data: post });
+        res.status(200).json({ status: 'success',  data: { likesCount: post.likes.length }});
     } catch (error) {
         console.error(error);
         res.status(500).json({ status: 'error', message: 'Internal server error' });

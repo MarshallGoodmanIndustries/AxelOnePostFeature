@@ -54,15 +54,12 @@ const listingSchema = new Schema({
     comments:[{
         type: mongoose.Schema.Types.ObjectId,
         ref: "Comment" // Ensure this matches the model name of your Comment model
-    }],
-    createdAt: {
-        type: Date,
-        default: Date.now
-    },
-    updatedAt: {
-        type: Date
-    }
-});
+    }]
+    
+
+},
+{ timestamps: true }
+);
 
 // Add pre-save hook to update `updatedAt` field
 listingSchema.pre('save', function(next) {

@@ -1,6 +1,8 @@
+
 const socket = io('http://localhost:3000', {
-    query: { token: 'YOUR_JWT_TOKEN_HERE' }
+    query: { token: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5meW5kYWguY29tL2FwaS92MS9hdXRoL2xvZ2luIiwiaWF0IjoxNzE3NDk0NDQ2LCJleHAiOjE3MTc0OTgwNDYsIm5iZiI6MTcxNzQ5NDQ0NiwianRpIjoiTmd4TnpHYXRyY1c0R0JBYyIsInN1YiI6IjIiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.zi8oMohSyq_76kYXeDC4LCiOtMBgzmGKokXqA4F6M30' }
 });
+
 
 const messageContainer = document.getElementById('message-container');
 const messageForm = document.getElementById('send-container');
