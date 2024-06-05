@@ -1,0 +1,68 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Notifications</title>
+    
+    <style>
+        #notifications {
+            position: fixed;
+            bottom: 10px;
+            right: 10px;
+            width: 300px;
+            max-width: 100%;
+            z-index: 1000;
+        }
+        .notification {
+            background-color: #444;
+            color: white;
+            padding: 10px;
+            margin-bottom: 10px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+        }
+    </style>
+    <script src="https://cdn.jsdelivr.net/npm/socket.io-client/dist/socket.io.js"></script>
+</head>
+<body>
+
+    <div>Hello, Notification centre</div>
+    <div id="notifications"></div>
+    <script>
+        const socket = io('http://localhost:3000', {
+            query: { token: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5meW5kYWguY29tL2FwaS92MS9hdXRoL2xvZ2luIiwiaWF0IjoxNzE3NTc1NTAyLCJleHAiOjE3MTc1NzkxMDIsIm5iZiI6MTcxNzU3NTUwMiwianRpIjoiVnRiR0R3Q0FwUDhZN2dCRSIsInN1YiI6IjIiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.U5F2lDrbeI4yMG8-mDO7auxyVeMgOGeHtaEyO0xTGts' }
+        });
+
+        socket.on('connect', () => {
+            console.log('Connected to the server with socket ID:', socket.id);
+
+            // Join a room (you would get the room ID from your application logic)
+            socket.emit('joinRoom', { roomId: '666012429ecf13b16d3e39a5', userId: '9' });
+
+            // Listen for notifications
+            socket.on('notification', (data) => {
+                showNotification(data.message);
+            });
+        });
+
+        socket.on('disconnect', () => {
+            console.log('Disconnected from the server');
+        });
+
+        function showNotification(message) {
+            const notificationsDiv = document.getElementById('notifications');
+            const notification = document.createElement('div');
+            notification.className = 'notification';
+            notification.innerText = message;
+
+            notificationsDiv.appendChild(notification);
+
+            setTimeout(() => {
+                notificationsDiv.removeChild(notification);
+            }, 5000);
+        }
+    </script>
+   
+</body>
+</html>

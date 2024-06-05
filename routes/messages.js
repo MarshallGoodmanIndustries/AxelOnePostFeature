@@ -46,9 +46,11 @@ router.post('/send-message/:recipientId/:conversationId', authenticate, async (r
         await newMessage.save();
 
         const io = req.io;
-        console.log(`Emitting message to room ${conversationId}`);
+        console.log(`Emitting message to room ${conversationId} ${recipientId}`);
         io.to(conversationId).emit('receiveMessage', { sender, message });
 
+         // Emit a notification to the recipient
+         io.to(recipientId).emit('notification', { message: `New message from ${sender}: ${message}` });
         res.status(200).json(newMessage);
     } catch (err) {
         console.error('Error saving message:', err);

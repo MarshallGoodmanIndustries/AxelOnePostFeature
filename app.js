@@ -75,6 +75,7 @@ io.on('connection', async (socket) => {
 
             // Emit the message to other users in the room
             socket.to(roomId).emit('receiveMessage', { sender: senderId, message });
+           
             callback(null, { success: true });
         } catch (error) {
             console.error('Error sending message:', error);
@@ -84,7 +85,14 @@ io.on('connection', async (socket) => {
     socket.on('disconnect', () => {
         console.log('A user disconnected', socket.id);
     });
+
+    // Emitting a notification event to a specific room
+    io.to('9').emit('notification', { message: 'This is a notification message' });
+    
+    // Emitting a notification event to all connected clients
+    io.emit('notification', { message: 'This is a notification message' });
 });
+
 
 // Start the server
 const PORT = process.env.PORT || 3000;

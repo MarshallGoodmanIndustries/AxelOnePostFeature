@@ -2,8 +2,8 @@ const io = require('socket.io-client');
 const jwt = require('jsonwebtoken');
 
 // Replace with your valid JWT token
-const token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5meW5kYWguY29tL2FwaS92MS9hdXRoL2xvZ2luIiwiaWF0IjoxNzE3NTA5NDkwLCJleHAiOjE3MTc1MTMwOTAsIm5iZiI6MTcxNzUwOTQ5MCwianRpIjoiczI5bURGdXJNbFRzdUM1NSIsInN1YiI6IjU4IiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.sFLzMz4lVfq91WRcRPyxYyX7XD9IhfqTis4ZIC6lbgI';
-const roomId = '665f0870f43ab1cca06ad107'; // Replace with your room ID
+const token = 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5meW5kYWguY29tL2FwaS92MS9hdXRoL2xvZ2luIiwiaWF0IjoxNzE3NTc1NTYxLCJleHAiOjE3MTc1NzkxNjEsIm5iZiI6MTcxNzU3NTU2MSwianRpIjoiZW85SFFPUE1XQ20wN21uTCIsInN1YiI6IjU4IiwicHJ2IjoiMjNiZDVjODk0OWY2MDBhZGIzOWU3MDFjNDAwODcyZGI3YTU5NzZmNyJ9.E7EqiWHEiuPbFMXhRwA-gTiHjd883ZlLz4ygNS7WP3A';
+const roomId = '666012429ecf13b16d3e39a5'; // Replace with your room ID
 const userId = '58'; // Replace with your user ID
 
 const socket = io('http://localhost:3000', {
