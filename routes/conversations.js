@@ -28,12 +28,14 @@ router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
 router.get('/myconversations', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
-        const conversation = await Conversation.find({ members: userId });
-        res.status(200).json(conversation);
+        const organizationId = req.user.organization_id;
+        const conversations = await Conversation.find({ members: { $in: [userId, organizationId] } });
+        res.status(200).json(conversations);
     } catch (err) {
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
+
 
 
 module.exports = router;
