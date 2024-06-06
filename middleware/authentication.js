@@ -18,13 +18,16 @@ const authenticate = async (req, res, next) => {
             ...decoded,
             email: response.data.data.user.email,
             username: response.data.data.user.username,
-            id: response.data.data.user.id
+            id: response.data.data.user.id,
+            organization_id: response.data.data.user.organization_id
         };
+console.log(response.data)
         next();
     } catch (error) {
         console.error(error);
         res.status(401).json({ status: 'error', message: 'Unauthorized' });
     }
 };
+
 
 module.exports = authenticate;
