@@ -11,6 +11,7 @@ const postRouter = require('./routes/postRoute');
 const listingRouter = require('./routes/listingRoute');
 const conversationRouter = require('./routes/conversations');
 const messageRouter = require('./routes/messages');
+// const saveNotification = require('../middleware/notification');
 const authenticate = require('./middleware/authenticate');
 const socketAuthenticate = require('./middleware/socketAuthenticate');
 
@@ -63,7 +64,7 @@ io.on('connection', async (socket) => {
         
         try {
             // Fetch the conversation to get the recipient
-            const conversation = await Conversation.findById(roomId);
+            const conversation = await conversation.findById(roomId);
             if (!conversation) {
                 throw new Error('Conversation not found');
             }
@@ -81,6 +82,14 @@ io.on('connection', async (socket) => {
             console.error('Error sending message:', error);
         }
     });
+
+    // socket.on("notification", ({sender, recipient, type}) => {
+    //     const recipientName = getUser(recipient);
+    //     console.log(recipientName);
+
+    //     io.to(recipientName.socketId).emit("get-notification", {sender, type});
+    //     createNotification({sender, recipient, type});
+    // });
 
     socket.on('disconnect', () => {
         console.log('A user disconnected', socket.id);
