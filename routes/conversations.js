@@ -28,8 +28,8 @@ router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
 router.get('/myconversations', authenticate, async (req, res) => {
     try {
         const userId = req.user.id;
-        const conversations = await Conversation.find({ members: userId });
-        res.status(200).json(conversations);
+        const conversation = await Conversation.find({ members: userId });
+        res.status(200).json(conversation);
     } catch (err) {
         res.status(500).json({ error: 'Something went wrong' });
     }
