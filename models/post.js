@@ -28,8 +28,7 @@ const postSchema = new mongoose.Schema({
         ref: "Comment" // Ensure this matches the model name of your Comment model
     }],
     likes: [{
-        type: Number,
-        required: true
+        type: Number
     }]
 },
 {timestamps: true}

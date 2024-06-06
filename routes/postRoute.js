@@ -16,8 +16,8 @@ const wss = new WebSocket.Server({ port: 8080});
 // Create post
 router.post('/post', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
     try {
-        const { title, description, organizationId } = req.body;
-        console.log('req.user.email', req.user.email, req.user.id, req.user.username);
+        const { title, description} = req.body;
+        console.log('req.user.email', req.user.email, req.user.id, req.user.username, req.user.organization_id);
         
         // Debug log to check req.user
         console.log('req.user before creating post:', req.user.email);
@@ -33,7 +33,6 @@ router.post('/post', authenticate, checkOrganization, upload.single('image'), as
         const newPost = new Post({
             title,
             description,
-            organization: organizationId,
             author: req.user.id,
             authorEmail: req.user.email,
             authorUsername: req.user.username,
