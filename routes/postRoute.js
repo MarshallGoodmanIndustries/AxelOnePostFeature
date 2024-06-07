@@ -48,6 +48,29 @@ router.post('/post', authenticate, checkOrganization, upload.single('image'), as
     }
 });
 
+//fetch all post for an organization
+router.get("/myposts", authenticate, async (req, res) => {
+    try {
+        const author = req.user.id;
+        
+        // Fetch all posts by the author
+        const posts = await Post.find({ author: author }).populate('comments likes');
+        
+        // Adding total number of likes for each post
+        const postsWithLikeCount = posts.map(post => {
+            return {
+                ...post._doc,
+                likesCount: post.likes.length
+            };
+        });
+        
+        res.status(200).json({ status: 'success', posts: postsWithLikeCount });
+    } catch (err) {
+        console.log(err);
+        res.status(500).json({ status: 'error', message: 'Server error' });
+    }
+});
+
 
 //edit post
 router.put('/post/:postId', authenticate, checkOrganization,  async (req, res) => {
