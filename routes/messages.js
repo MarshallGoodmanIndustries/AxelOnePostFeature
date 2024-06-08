@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const Message = require('../models/message');
+const Conversation = require('../models/conversations');
 const authenticate = require('../middleware/authentication');
 
 router.get('/:conversationId', async (req, res) => {
@@ -23,9 +24,11 @@ router.get('/:conversationId', async (req, res) => {
     }
 });
 
-router.post('/send-message/:recipientId/:conversationId', authenticate, async (req, res) => {
-    const { recipientId, conversationId } = req.params;
+router.post('/send-message/:conversationId', authenticate, async (req, res) => {
+    const { conversationId } = req.params;
     const { message } = req.body;
+    const senderId = req.user.id;
+    const sender = req.user.username;
 
     if (!message) {
         console.error('Message is required');
@@ -33,26 +36,34 @@ router.post('/send-message/:recipientId/:conversationId', authenticate, async (r
     }
 
     try {
-        const sender = req.user.username;
-        const senderId = req.user.id
-        console.log(`Sender: ${sender}, Recipient: ${recipientId}, ConversationId: ${conversationId}, Message: ${message}`);
+        // Fetch the conversation to find the recipient
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation) {
+            return res.status(404).json({ error: 'Conversation not found' });
+        }
+
+        // Find the recipient in the conversation members
+        const recipientId = conversation.members.find(member => member !== senderId);
+        if (!recipientId) {
+            return res.status(400).json({ error: 'Recipient not found' });
+        }
 
         const newMessage = new Message({
             sender,
-            senderId: senderId,
+            senderId,
             recipient: recipientId,
-            message,
             conversationId,
+            message,
             timestamp: new Date()
         });
         await newMessage.save();
 
         const io = req.io;
-        console.log(`Emitting message to room ${conversationId} ${recipientId}`);
-        io.to(conversationId).emit('receiveMessage', { sender, message });
+        io.to(conversationId).emit('receiveMessage', { senderId, message });
 
-         // Emit a notification to the recipient
-         io.to(recipientId).emit('notification', { message: `New message from ${sender}: ${message}` });
+        // Emit a notification to the recipient
+        io.to(recipientId).emit('notification', { message: `New message from ${req.user.username}: ${message}` });
+
         res.status(200).json(newMessage);
     } catch (err) {
         console.error('Error saving message:', err);
