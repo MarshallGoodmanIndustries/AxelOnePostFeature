@@ -1,6 +1,8 @@
 const jwt = require('jsonwebtoken');
 const axios = require('axios');
 
+
+// Authentication Middleware
 const authenticate = async (req, res, next) => {
     const authHeader = req.headers.authorization;
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
@@ -21,13 +23,12 @@ const authenticate = async (req, res, next) => {
             id: response.data.data.user.id,
             organization_id: response.data.data.user.organization_id
         };
-console.log(response.data)
+        req.token = token; // Ensure the token is available for further API calls
         next();
     } catch (error) {
         console.error(error);
         res.status(401).json({ status: 'error', message: 'Unauthorized' });
     }
 };
-
 
 module.exports = authenticate;

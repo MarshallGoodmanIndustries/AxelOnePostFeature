@@ -3,9 +3,53 @@
 const express = require('express');
 const router = express.Router();
 const Conversation = require('../models/conversations');
-const authenticate = require('../middleware/authentication'); // Your auth middleware
+const NodeCache = require("node-cache");
+const profileCache = new NodeCache({ stdTTL: 600 }); // Cache for 10 minutes
 const axios = require('axios');
-// router.use(authenticate);
+const jwt = require('jsonwebtoken');
+
+const authenticate = async (req, res, next) => {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        return res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    }
+    const token = authHeader.split(' ')[1];
+    try {
+        let userProfile = profileCache.get(token);
+        if (!userProfile) {
+            const response = await fetchWithRetry('https://api.fyndah.com/api/v1/users/profile', {
+                headers: { Authorization: `Bearer ${token}` },
+                timeout: 10000  // Increase to 10 seconds
+            });
+            userProfile = response.data.data.user;
+            profileCache.set(token, userProfile); // Cache the profile
+        }
+        const decoded = jwt.verify(token, process.env.JWT_SEC);
+        req.user = {
+            ...decoded,
+            email: userProfile.email,
+            username: userProfile.username,
+            id: userProfile.id,
+            organization_id: userProfile.organization_id
+        };
+        req.token = token; // Ensure the token is available for further API calls
+        next();
+    } catch (error) {
+        console.error(error);
+        res.status(401).json({ status: 'error', message: 'Unauthorized' });
+    }
+};
+
+const fetchWithRetry = async (url, options, retries = 3, delay = 1000) => {
+    try {
+        return await axios.get(url, options);
+    } catch (error) {
+        if (retries === 0) throw error;
+        console.warn(`Retrying in ${delay}ms... (${retries} attempts left)`);
+        await new Promise(resolve => setTimeout(resolve, delay));
+        return await fetchWithRetry(url, options, retries - 1, delay * 2);
+    }
+};
 
 // Create a new conversation
 router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
@@ -42,45 +86,6 @@ router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
     }
 });
 
-
-// Get conversations by userId
-router.get('/myconversations', authenticate, async (req, res) => {
-    try {
-        const userId = req.user.id.toString();
-        const organizationId = req.user.organization_id ? req.user.organization_id.toString() : null;
-
-        // Construct query conditions
-        const queryConditions = [{ members: userId }];
-        if (organizationId) {
-            queryConditions.push({ members: organizationId });
-        }
-
-        console.log('Query Conditions:', queryConditions);
-
-        // Fetch conversations
-        let conversations = [];
-        if (queryConditions.length > 0) {
-            conversations = await Conversation.find({
-                $or: queryConditions
-            }).sort({ updatedAt: -1 });
-        }
-
-        console.log('Fetched Conversations:', conversations);
-
-        // Check if conversations are found
-        if (!conversations || conversations.length === 0) {
-            return res.status(404).json({ error: 'No conversations found for this user' });
-        }
-
-        res.status(200).json(conversations);
-    } catch (err) {
-        console.error('Error fetching conversations:', err);
-        res.status(500).json({ error: 'Something went wrong' });
-    }
-});
-
-
-
 router.get('/myconversations', authenticate, async (req, res) => {
     try {
         const userId = req.user.id.toString();
@@ -95,36 +100,39 @@ router.get('/myconversations', authenticate, async (req, res) => {
             return res.status(404).json({ error: 'No conversations found for this user' });
         }
 
-        const memberIds = [...new Set(conversations.flatMap(convo => convo.members))];
+        const options = {
+            headers: { Authorization: `Bearer ${req.token}` },
+            timeout: 10000  // Increase to 10 seconds
+        };
 
-        const allUsersResponse = await axios.get('https://api.fyndah.com/api/v1/users/all', {
-            headers: { 'Authorization': `Bearer ${req.token}` }
-        });
-        const allUsers = allUsersResponse.data;
+        // Fetch all users
+        const allUsersResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/users/all', options);
+        const allUsers = allUsersResponse.data.data;
+
+        // Fetch all organizations
+        const allOrganizationsResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/organization', options);
+        const allOrganizations = allOrganizationsResponse.data.data;
 
         const userMap = allUsers.reduce((map, user) => {
             map[user.id] = user;
             return map;
         }, {});
 
-        const organizationResponses = await Promise.all(memberIds.map(id => 
-            axios.get(`https://api.fyndah.com/api/v1/organization/${id}?org_key=${id}`, {
-                headers: { 'Authorization': `Bearer ${req.token}` }
-            })
-        ));
-        const organizations = organizationResponses.map(response => response.data);
-
-        const organizationMap = organizations.reduce((map, org) => {
+        const organizationMap = allOrganizations.reduce((map, org) => {
             map[org.id] = org;
             return map;
         }, {});
 
         conversations = conversations.map(convo => ({
             ...convo._doc,
-            members: convo.members.map(memberId => ({
-                id: memberId,
-                name: userMap[memberId]?.username || organizationMap[memberId]?.name || 'Unknown'
-            }))
+            members: convo.members.map(memberId => {
+                const user = userMap[memberId];
+                const organization = organizationMap[memberId];
+                return {
+                    id: memberId,
+                    name: user ? user.username : (organization ? organization.org_name : 'Unknown')
+                };
+            })
         }));
 
         res.status(200).json(conversations);
@@ -133,7 +141,5 @@ router.get('/myconversations', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
-
 
 module.exports = router;
