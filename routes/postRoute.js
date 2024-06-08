@@ -17,6 +17,7 @@ const wss = new WebSocket.Server({ port: 8080});
 router.post('/post', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
     try {
         const { title, description} = req.body;
+        const organizationId = req.user.organization_id
         console.log('req.user.email', req.user.email, req.user.id, req.user.username, req.user.organization_id);
         
         // Debug log to check req.user
@@ -35,6 +36,7 @@ router.post('/post', authenticate, checkOrganization, upload.single('image'), as
             description,
             author: req.user.id,
             authorEmail: req.user.email,
+            organization: organizationId,
             authorUsername: req.user.username,
             image: imageUrl // Add image URL to the post document
         });

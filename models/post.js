@@ -12,7 +12,8 @@ const postSchema = new mongoose.Schema({
         type: String
     },
     organization: {
-        type: String
+        type: String,
+        required: true
     },
     author: {
         type: String
