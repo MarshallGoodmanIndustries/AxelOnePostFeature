@@ -125,13 +125,28 @@ router.get('/myconversations', authenticate, async (req, res) => {
 
         conversations = conversations.map(convo => ({
             ...convo._doc,
-            members: convo.members.map(memberId => {
-                const user = userMap[memberId];
-                const organization = organizationMap[memberId];
-                return {
-                    id: memberId,
-                    name: user ? user.username : (organization ? organization.org_name : 'Unknown')
-                };
+            members: convo.members.map((memberId, index) => {
+                if (index === 0) {
+                    // First member is a user
+                    const user = userMap[memberId];
+                    return {
+                        id: memberId,
+                        name: user ? user.username : 'Unknown User'
+                    };
+                } else if (index === 1) {
+                    // Second member is an organization
+                    const organization = organizationMap[memberId];
+                    return {
+                        id: memberId,
+                        name: organization ? organization.org_name : 'Unknown Organization'
+                    };
+                } else {
+                    // For any additional members, you can decide how to handle them (optional)
+                    return {
+                        id: memberId,
+                        name: 'Additional Member'
+                    };
+                }
             })
         }));
 
@@ -141,5 +156,134 @@ router.get('/myconversations', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
+
+
+// router.get('/myconversations', authenticate, async (req, res) => {
+//     try {
+//         const userId = req.user.id.toString();
+//         const organizationId = req.user.organization_id ? req.user.organization_id.toString() : null;
+
+//         // Build query conditions for MongoDB query
+//         const queryConditions = [{ members: userId }];
+//         if (organizationId) queryConditions.push({ members: organizationId });
+
+//         // Fetch conversations from database
+//         let conversations = await Conversation.find({ $or: queryConditions }).sort({ updatedAt: -1 });
+
+//         if (!conversations || conversations.length === 0) {
+//             return res.status(404).json({ error: 'No conversations found for this user' });
+//         }
+
+//         const options = {
+//             headers: { Authorization: `Bearer ${req.token}` },
+//             timeout: 10000  // Increase to 10 seconds
+//         };
+
+//         // Fetch all organizations
+//         const allOrganizationsResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/organization', options);
+//         const allOrganizations = allOrganizationsResponse.data.data;
+
+//         // Create map for quick lookup of organizations
+//         const organizationMap = allOrganizations.reduce((map, org) => {
+//             map[org.id] = org;
+//             return map;
+//         }, {});
+
+//         // Map conversations with resolved organization names
+//         conversations = conversations.map(convo => ({
+//             ...convo._doc,
+//             members: convo.members.map(memberId => {
+//                 const organization = organizationMap[memberId];
+//                 return {
+//                     id: memberId,
+//                     name: organization ? organization.org_name : 'Unknown'
+//                 };
+//             })
+//         }));
+
+//         res.status(200).json(conversations);
+//     } catch (err) {
+//         console.error('Error fetching conversations:', err);
+//         res.status(500).json({ error: 'Something went wrong' });
+//     }
+// });
+
+// router.get('/myconversations', authenticate, async (req, res) => {
+//     try {
+//         const userId = req.user.id.toString();
+//         const organizationId = req.user.organization_id ? req.user.organization_id.toString() : null;
+
+//         // Build query conditions for MongoDB query
+//         const queryConditions = [{ members: userId }];
+//         if (organizationId) queryConditions.push({ members: organizationId });
+
+//         // Fetch conversations from database
+//         let conversations = await Conversation.find({ $or: queryConditions }).sort({ updatedAt: -1 });
+
+//         if (!conversations || conversations.length === 0) {
+//             return res.status(404).json({ error: 'No conversations found for this user' });
+//         }
+
+//         const options = {
+//             headers: { Authorization: `Bearer ${req.token}` },
+//             timeout: 10000  // Increase to 10 seconds
+//         };
+
+//         // Fetch all users and organizations concurrently
+//         const [allUsersResponse, allOrganizationsResponse] = await Promise.all([
+//             fetchWithRetry('https://api.fyndah.com/api/v1/users/all', options),
+//             fetchWithRetry('https://api.fyndah.com/api/v1/organization', options)
+//         ]);
+
+//         const allUsers = allUsersResponse.data.data;
+//         const allOrganizations = allOrganizationsResponse.data.data;
+
+//         // Create maps for quick lookup
+//         const userMap = allUsers.reduce((map, user) => {
+//             map[user.id] = user;
+//             return map;
+//         }, {});
+
+//         const organizationMap = allOrganizations.reduce((map, org) => {
+//             map[org.id] = org;
+//             return map;
+//         }, {});
+
+//         // Create a function to identify the entity type
+//         const identifyEntity = async (id) => {
+//             if (userMap[id]) {
+//                 return { id, name: userMap[id].username, type: 'user' };
+//             } else if (organizationMap[id]) {
+//                 return { id, name: organizationMap[id].org_name, type: 'organization' };
+//             } else {
+//                 // Fetch user data by ID
+//                 const userResponse = await fetchWithRetry(`https://api.fyndah.com/api/v1/users/${id}`, options);
+//                 if (userResponse.data) {
+//                     return { id, name: userResponse.data.username, type: 'user' };
+//                 }
+
+//                 // Fetch organization data by ID
+//                 const orgResponse = await fetchWithRetry(`https://api.fyndah.com/api/v1/organization/${id}`, options);
+//                 if (orgResponse.data) {
+//                     return { id, name: orgResponse.data.org_name, type: 'organization' };
+//                 }
+
+//                 return { id, name: 'Unknown', type: 'unknown' };
+//             }
+//         };
+
+//         // Resolve members for each conversation
+//         conversations = await Promise.all(conversations.map(async convo => {
+//             const members = await Promise.all(convo.members.map(identifyEntity));
+//             return { ...convo._doc, members };
+//         }));
+
+//         res.status(200).json(conversations);
+//     } catch (err) {
+//         console.error('Error fetching conversations:', err);
+//         res.status(500).json({ error: 'Something went wrong' });
+//     }
+// });
+
 
 module.exports = router;
