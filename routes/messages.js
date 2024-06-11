@@ -3,6 +3,7 @@ const router = express.Router();
 const Message = require('../models/message');
 const Conversation = require('../models/conversations');
 const authenticate = require('../middleware/authentication');
+const axios = require('axios'); // Assuming you use axios for HTTP requests
 
 router.get('/:conversationId', async (req, res) => {
     try {
@@ -24,11 +25,69 @@ router.get('/:conversationId', async (req, res) => {
     }
 });
 
+// router.post('/send-message/:conversationId', authenticate, async (req, res) => {
+//     const { conversationId } = req.params;
+//     const { message } = req.body;
+//     const senderId = req.user.id;
+//     const sender = req.user.username;
+//     const senderType = req.user.msg_id ? 'organization' : 'user'; // Assuming msg_id indicates an organization
+
+//     if (!message) {
+//         console.error('Message is required');
+//         return res.status(400).json({ error: 'Message is required' });
+//     }
+
+//     try {
+//         // Fetch the conversation to find the recipient
+//         const conversation = await Conversation.findById(conversationId);
+//         if (!conversation) {
+//             return res.status(404).json({ error: 'Conversation not found' });
+//         }
+
+//         // Find the recipient in the conversation members
+//         const recipientId = conversation.members.find(member => member !== senderId);
+//         if (!recipientId) {
+//             return res.status(400).json({ error: 'Recipient not found' });
+//         }
+
+//         const recipientType = recipientId.length === 20 ? 'organization' : 'user'; // Assuming organization IDs are 20 characters long
+
+//         // Check if sender can send message to recipient based on sender and recipient types
+//         if ((senderType === 'organization' && recipientType === 'user') ||
+//             (senderType === 'user' && recipientType === 'organization')) {
+//             // Sender is an organization sending to a user or vice versa
+//             const newMessage = new Message({
+//                 sender,
+//                 senderId,
+//                 recipient: recipientId,
+//                 conversationId,
+//                 message,
+//                 timestamp: new Date()
+//             });
+//             await newMessage.save();
+
+//             const io = req.io;
+//             io.to(conversationId).emit('receiveMessage', { senderId, message });
+
+//             // Emit a notification to the recipient
+//             io.to(recipientId).emit('notification', { message: `New message from ${req.user.username}: ${message}` });
+
+//             res.status(200).json(newMessage);
+//         } else {
+//             // Sender cannot send message to recipient
+//             return res.status(403).json({ error: 'Sender is not allowed to send message to recipient' });
+//         }
+//     } catch (err) {
+//         console.error('Error saving message:', err);
+//         res.status(500).json({ error: 'Something went wrong' });
+//     }
+// });
 router.post('/send-message/:conversationId', authenticate, async (req, res) => {
     const { conversationId } = req.params;
     const { message } = req.body;
     const senderId = req.user.id;
     const sender = req.user.username;
+    const senderType = req.user.id ? 'user' : 'organization'; // Assuming user.id indicates a user
 
     if (!message) {
         console.error('Message is required');
@@ -42,29 +101,50 @@ router.post('/send-message/:conversationId', authenticate, async (req, res) => {
             return res.status(404).json({ error: 'Conversation not found' });
         }
 
+        // Fetch organization data from the API
+        const response = await axios.get('https://api.fyndah.com/api/v1/organization', {
+            headers: { Authorization: `Bearer ${req.token}` } // Assuming the token is available in req.token
+        });
+
+        const organizations = response.data.data;
+
         // Find the recipient in the conversation members
-        const recipientId = conversation.members.find(member => member !== senderId);
+        const recipientId = conversation.members.find(member => member !== senderId.toString());
+
         if (!recipientId) {
             return res.status(400).json({ error: 'Recipient not found' });
         }
 
-        const newMessage = new Message({
-            sender,
-            senderId,
-            recipient: recipientId,
-            conversationId,
-            message,
-            timestamp: new Date()
-        });
-        await newMessage.save();
+        // Determine if the recipient is an organization or user
+        const recipientType = recipientId.length === 20 ? 'organization' : 'user'; // Assuming organization IDs are 20 characters long
 
-        const io = req.io;
-        io.to(conversationId).emit('receiveMessage', { senderId, message });
+        // Check if sender can send message to recipient based on sender and recipient types
+        if ((senderType === 'organization' && recipientType === 'user') ||
+            (senderType === 'user' && recipientType === 'organization') ||
+            (senderType === 'user' && recipientType === 'user')) {
 
-        // Emit a notification to the recipient
-        io.to(recipientId).emit('notification', { message: `New message from ${req.user.username}: ${message}` });
+            // Sender is an organization sending to a user, or vice versa, or a user sending to another user
+            const newMessage = new Message({
+                sender,
+                senderId,
+                recipient: recipientId,
+                conversationId,
+                message,
+                timestamp: new Date()
+            });
+            await newMessage.save();
 
-        res.status(200).json(newMessage);
+            const io = req.io;
+            io.to(conversationId).emit('receiveMessage', { senderId, message });
+
+            // Emit a notification to the recipient
+            io.to(recipientId).emit('notification', { message: `New message from ${req.user.username}: ${message}` });
+
+            res.status(200).json(newMessage);
+        } else {
+            // Sender cannot send message to recipient
+            return res.status(403).json({ error: 'Sender is not allowed to send message to recipient' });
+        }
     } catch (err) {
         console.error('Error saving message:', err);
         res.status(500).json({ error: 'Something went wrong' });
@@ -72,7 +152,10 @@ router.post('/send-message/:conversationId', authenticate, async (req, res) => {
 });
 
 
+
 // Explicit setting route
+// 
+
 router.post('/messages/:messageId/read', authenticate, async (req, res) => {
     try {
         const { messageId } = req.params;
@@ -83,7 +166,7 @@ router.post('/messages/:messageId/read', authenticate, async (req, res) => {
         }
 
         const userId = req.user.id; // The authenticated user's ID
-        const organizationId = req.user.organization_id; // The authenticated user's organization ID (if any)
+        const organizationId = req.user.msg_id; // The authenticated user's organization ID (if any)
 
         console.log(`User ID: ${userId}, Organization ID: ${organizationId}`);
 
@@ -117,7 +200,7 @@ router.post('/messages/:messageId/toggle-read', authenticate, async (req, res) =
     try {
         const { messageId } = req.params;
         const userId = req.user.id; // Ordinary user ID
-        const organizationId = req.user.organization_id; // Organization ID
+        const organizationId = req.user.msg_id; // Organization ID
 
         // Log the IDs to debug
         console.log('User ID:', userId);
@@ -152,8 +235,8 @@ router.post('/messages/:messageId/toggle-read', authenticate, async (req, res) =
 router.get('/messages/unread', authenticate, async (req, res) => {
     try {
         let recipientId;
-        if (req.user.organization_id) {
-            recipientId = req.user.organization_id;
+        if (req.user.msg_id) {
+            recipientId = req.user.msg_id;
         } else {
             recipientId = req.user.id;
         }
@@ -171,7 +254,7 @@ router.post('/messages/:messageId/toggle-archive', authenticate, async (req, res
     try {
         const { messageId } = req.params;
         const userId = req.user.id; // Ordinary user ID
-        const organizationId = req.user.organization_id; // Organization ID
+        const organizationId = req.user.msg_id; // Organization ID
 
         // Log the IDs to debug
         console.log('User ID:', userId);
@@ -208,7 +291,7 @@ router.post('/messages/:messageId/toggle-archive', authenticate, async (req, res
 // Retrieve archived messages
 router.get('/messages/archived', authenticate, async (req, res) => {
     const userId = req.user.id;
-    const organizationId = req.user.organization_id;
+    const organizationId = req.user.msg_id;
 
     try {
         // Find messages where the recipient or sender is either the user or the organization and are archived
@@ -251,7 +334,7 @@ router.post('/messages/:messageId/tag', authenticate, async (req, res) => {
     try {
         const { messageId } = req.params;
         const userId = req.user.id.toString();
-        const organizationId = req.user.organization_id ? req.user.organization_id.toString() : null;
+        const organizationId = req.user.msg_id ? req.user.msg_id.toString() : null;
         const { tags, category } = req.body;
 
         // Debug logging
@@ -294,7 +377,7 @@ router.post('/messages/:messageId/tag', authenticate, async (req, res) => {
 // Retrieve messages by tags
 router.get('/messages/tagged/:tag', authenticate, async (req, res) => {
     const userId = req.user.id.toString();
-    const organizationId = req.user.organization_id ? req.user.organization_id.toString() : null;
+    const organizationId = req.user.msg_id ? req.user.msg_id.toString() : null;
     const tag = req.params.tag;
 
     try {
@@ -316,7 +399,7 @@ router.get('/messages/tagged/:tag', authenticate, async (req, res) => {
 // Retrieve messages cartegories
 router.get('/messages/category/:category', authenticate, async (req, res) => {
     const userId = req.user.id.toString();
-    const organizationId = req.user.organization_id ? req.user.organization_id.toString() : null;
+    const organizationId = req.user.msg_id ? req.user.msg_id.toString() : null;
     const category = req.params.category;
 
     try {
