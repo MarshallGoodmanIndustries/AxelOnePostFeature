@@ -90,109 +90,110 @@ router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
 
 
 
-// router.get('/myconversations', authenticate, async (req, res) => {
-//     try {
-//         const userId = req.user.id.toString();
-//         const msgId = req.user.msg_id ? req.user.msg_id.toString() : null;
+router.get('/myconversations', authenticate, async (req, res) => {
+    try {
+        const userId = req.user.id.toString();
+        const msgId = req.org ? req.org.msg_id : null; // Get msg_id if the user is an organization
 
-//         console.log(msgId)
+        const options = {
+            headers: { Authorization: `Bearer ${req.token}` },
+            timeout: 10000  // Increase to 10 seconds
+        };
 
-//         const options = {
-//             headers: { Authorization: `Bearer ${req.token}` },
-//             timeout: 10000  // Increase to 10 seconds
-//         };
+        // Fetch all users and organizations
+        let allUsers = [];
+        let allOrganizations = [];
 
-//         // Fetch all users and organizations
-//         let allUsers = [];
-//         let allOrganizations = [];
+        try {
+            const allUsersResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/users/all', options);
+            allUsers = allUsersResponse.data.data;
+        } catch (error) {
+            console.error('Error fetching users:', error);
+            return res.status(500).json({ error: 'Failed to fetch users' });
+        }
 
-//         try {
-//             const allUsersResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/users/all', options);
-//             allUsers = allUsersResponse.data.data;
-//         } catch (error) {
-//             console.error('Error fetching users:', error);
-//             return res.status(500).json({ error: 'Failed to fetch users' });
-//         }
+        try {
+            const allOrganizationsResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/organization', options);
+            allOrganizations = allOrganizationsResponse.data.data;
+        } catch (error) {
+            console.error('Error fetching organizations:', error);
+            return res.status(500).json({ error: 'Failed to fetch organizations' });
+        }
 
-//         try {
-//             const allOrganizationsResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/organization', options);
-//             allOrganizations = allOrganizationsResponse.data.data;
-//         } catch (error) {
-//             console.error('Error fetching organizations:', error);
-//             return res.status(500).json({ error: 'Failed to fetch organizations' });
-//         }
+        const userMap = allUsers.reduce((map, user) => {
+            map[user.id] = user;
+            return map;
+        }, {});
 
-//         const userMap = allUsers.reduce((map, user) => {
-//             map[user.id] = user;
-//             return map;
-//         }, {});
+        const organizationMap = allOrganizations.reduce((map, org) => {
+            map[org.msg_id] = org;
+            return map;
+        }, {});
 
-//         const organizationMap = allOrganizations.reduce((map, org) => {
-//             map[org.msg_id] = org;
-//             return map;
-//         }, {});
+        let conversations;
 
-//         let conversations;
+        if (msgId && organizationMap[msgId]) {
+            // Fetch conversations for the organization
+            conversations = await Conversation.find({ members: msgId }).sort({ updatedAt: -1 });
 
-//         if (msgId && organizationMap[msgId]) {
-//             // Fetch conversations for the organization
-//             conversations = await Conversation.find({ members: msgId }).sort({ updatedAt: -1 });
+            if (!conversations || conversations.length === 0) {
+                return res.status(404).json({ error: 'No conversations found for this organization' });
+            }
 
-//             if (!conversations || conversations.length === 0) {
-//                 return res.status(404).json({ error: 'No conversations found for this organization' });
-//             }
+            conversations = conversations.map(convo => ({
+                ...convo._doc,
+                members: convo.members.map(memberId => {
+                    if (memberId.length === 20) {  // Assuming organization IDs are 20 characters long
+                        const organization = organizationMap[memberId];
+                        return {
+                            id: memberId,
+                            name: organization ? organization.org_name : 'Unknown'
+                        };
+                    } else {
+                        const user = userMap[memberId];
+                        return {
+                            id: memberId,
+                            name: user ? user.username : 'Unknown'
+                        };
+                    }
+                })
+            }));
+        } else {
+            // Fetch conversations for the user
+            conversations = await Conversation.find({ members: userId }).sort({ updatedAt: -1 });
 
-//             conversations = conversations.map(convo => ({
-//                 ...convo._doc,
-//                 members: convo.members.map(memberId => {
-//                     if (memberId.length === 20) {  // Assuming organization IDs are 20 characters long
-//                         const organization = organizationMap[memberId];
-//                         return {
-//                             id: memberId,
-//                             name: organization ? organization.org_name : 'Unknown'
-//                         };
-//                     } else {
-//                         const user = userMap[memberId];
-//                         return {
-//                             id: memberId,
-//                             name: user ? user.username : 'Unknown'
-//                         };
-//                     }
-//                 })
-//             }));
-//         } else {
-//             // Fetch conversations for the user
-//             conversations = await Conversation.find({ members: userId }).sort({ updatedAt: -1 });
+            if (!conversations || conversations.length === 0) {
+                return res.status(404).json({ error: 'No conversations found for this user' });
+            }
 
-//             if (!conversations || conversations.length === 0) {
-//                 return res.status(404).json({ error: 'No conversations found for this user' });
-//             }
+            conversations = conversations.map(convo => ({
+                ...convo._doc,
+                members: convo.members.map(memberId => {
+                    if (memberId.length === 20) {  // Assuming organization IDs are 20 characters long
+                        const organization = organizationMap[memberId];
+                        return {
+                            id: memberId,
+                            name: organization ? organization.org_name : 'Unknown'
+                        };
+                    } else {
+                        const user = userMap[memberId];
+                        return {
+                                                        id: memberId,
+                                                        name: user ? user.username : 'Unknown'
+                                                    };
+                                                }
+                                            })
+                                        }));
+                                    }
+                            
+                                    res.status(200).json(conversations);
+                                } catch (err) {
+                                    console.error('Error fetching conversations:', err);
+                                    res.status(500).json({ error: 'Something went wrong' });
+                                }
+                            });
 
-//             conversations = conversations.map(convo => ({
-//                 ...convo._doc,
-//                 members: convo.members.map(memberId => {
-//                     if (memberId.length === 20) {  // Assuming organization IDs are 20 characters long
-//                         const organization = organizationMap[memberId];
-//                         return {
-//                             id: memberId,
-//                             name: organization ? organization.org_name : 'Unknown'
-//                         };
-//                     } else {
-//                         const user = userMap[memberId];
-//                         return {
-//                             id: memberId,
-//                             name: user ? user.username : 'Unknown'
-//                         };
-//                     }
-//                 })
-//             }));
-//         }
 
-//         res.status(200).json(conversations);
-//     } catch (err) {
-//         console.error('Error fetching conversations:', err);
-//         res.status(500).json({ error: 'Something went wrong' });
-//     }
-// });
+
 
 module.exports = router;
