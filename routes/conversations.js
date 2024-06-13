@@ -6,57 +6,13 @@ const Conversation = require('../models/conversations');
 const NodeCache = require("node-cache");
 const profileCache = new NodeCache({ stdTTL: 600 }); // Cache for 10 minutes
 const axios = require('axios');
-const jwt = require('jsonwebtoken');
-
-const authenticate = async (req, res, next) => {
-    const authHeader = req.headers.authorization;
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-        return res.status(401).json({ status: 'error', message: 'Unauthorized' });
-    }
-    const token = authHeader.split(' ')[1];
-    try {
-        let userProfile = profileCache.get(token);
-        if (!userProfile) {
-            const response = await fetchWithRetry('https://api.fyndah.com/api/v1/users/profile', {
-                headers: { Authorization: `Bearer ${token}` },
-                timeout: 10000  // Increase to 10 seconds
-            });
-            userProfile = response.data.data.user;
-            profileCache.set(token, userProfile); // Cache the profile
-        }
-        const decoded = jwt.verify(token, process.env.JWT_SEC);
-        req.user = {
-            ...decoded,
-            email: userProfile.email,
-            username: userProfile.username,
-            id: userProfile.id,
-            msg_id: userProfile.msg_id
-        };
-        req.token = token; // Ensure the token is available for further API calls
-        next();
-    } catch (error) {
-        console.error(error);
-        res.status(401).json({ status: 'error', message: 'Unauthorized' });
-    }
-};
-
-const fetchWithRetry = async (url, options, retries = 3, delay = 1000) => {
-    try {
-        return await axios.get(url, options);
-    } catch (error) {
-        if (retries === 0) throw error;
-        console.warn(`Retrying in ${delay}ms... (${retries} attempts left)`);
-        await new Promise(resolve => setTimeout(resolve, delay));
-        return await fetchWithRetry(url, options, retries - 1, delay * 2);
-    }
-};
+const authenticate = require('../middleware/authenticator')
 
 // Create a new conversation
 router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
-    const { receiverId } = req.params;
-    const userId = String(req.user.id);
-    const senderId = req.user.msg_id && req.user.msg_id.length === 20 ? req.user.msg_id : userId;
-    const senderType = req.user.msg_id && req.user.msg_id.length === 20 ? 'organization' : 'user';
+    let receiverId = req.params.receiverId.trim(); // Trim whitespace from receiverId
+    const senderId = req.user.msg_id;
+
 
     if (!senderId || !receiverId) {
         return res.status(400).json({ error: 'Both sender and receiver IDs are required' });
@@ -88,40 +44,39 @@ router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
     }
 });
 
-
-
 router.get('/myconversations', authenticate, async (req, res) => {
     try {
-        const userId = req.user.id.toString();
-        const msgId = req.org ? req.org.msg_id : null; // Get msg_id if the user is an organization
-
+        const userId = req.user.msg_id.toString();
         const options = {
             headers: { Authorization: `Bearer ${req.token}` },
-            timeout: 10000  // Increase to 10 seconds
+            timeout: 10000
         };
 
-        // Fetch all users and organizations
         let allUsers = [];
         let allOrganizations = [];
 
+        // Step 1: Fetch all users and organizations from the external API using axios
         try {
             const allUsersResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/users/all', options);
-            allUsers = allUsersResponse.data.data;
+            allUsers = allUsersResponse.data;
+            console.log('Fetched users:', allUsers);
         } catch (error) {
-            console.error('Error fetching users:', error);
+            console.error('Error fetching users:', error.message);
             return res.status(500).json({ error: 'Failed to fetch users' });
         }
 
         try {
             const allOrganizationsResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/organization', options);
-            allOrganizations = allOrganizationsResponse.data.data;
+            allOrganizations = allOrganizationsResponse.data;
+            console.log('Fetched organizations:', allOrganizations);
         } catch (error) {
-            console.error('Error fetching organizations:', error);
+            console.error('Error fetching organizations:', error.message);
             return res.status(500).json({ error: 'Failed to fetch organizations' });
         }
 
+        // Step 2: Create maps for quick lookup
         const userMap = allUsers.reduce((map, user) => {
-            map[user.id] = user;
+            map[user.msg_id] = user;
             return map;
         }, {});
 
@@ -130,70 +85,54 @@ router.get('/myconversations', authenticate, async (req, res) => {
             return map;
         }, {});
 
-        let conversations;
+        console.log('User Map:', userMap);
+        console.log('Organization Map:', organizationMap);
 
-        if (msgId && organizationMap[msgId]) {
-            // Fetch conversations for the organization
-            conversations = await Conversation.find({ members: msgId }).sort({ updatedAt: -1 });
+        // Step 3: Fetch conversations for the authenticated user
+        const conversations = await Conversation.find({ members: userId }).sort({ updatedAt: -1 });
 
-            if (!conversations || conversations.length === 0) {
-                return res.status(404).json({ error: 'No conversations found for this organization' });
-            }
+        if (!conversations || conversations.length === 0) {
+            return res.status(404).json({ error: 'No conversations found for this user' });
+        }
 
-            conversations = conversations.map(convo => ({
-                ...convo._doc,
-                members: convo.members.map(memberId => {
-                    if (memberId.length === 20) {  // Assuming organization IDs are 20 characters long
-                        const organization = organizationMap[memberId];
-                        return {
-                            id: memberId,
-                            name: organization ? organization.org_name : 'Unknown'
-                        };
-                    } else {
-                        const user = userMap[memberId];
-                        return {
-                            id: memberId,
-                            name: user ? user.username : 'Unknown'
-                        };
-                    }
-                })
-            }));
-        } else {
-            // Fetch conversations for the user
-            conversations = await Conversation.find({ members: userId }).sort({ updatedAt: -1 });
+        // Step 4: Map conversations to include member names dynamically
+        const results = conversations.map(convo => ({
+            _id: convo._id,
+            members: convo.members.map(member => ({
+                id: member,
+                name: getNameById(member, userMap, organizationMap)
+            })),
+            updatedAt: convo.updatedAt,
+            __v: convo.__v
+        }));
 
-            if (!conversations || conversations.length === 0) {
-                return res.status(404).json({ error: 'No conversations found for this user' });
-            }
+        // Step 5: Return the results
+        res.status(200).json(results);
+    } catch (err) {
+        console.error('Error fetching conversations:', err.message);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+});
 
-            conversations = conversations.map(convo => ({
-                ...convo._doc,
-                members: convo.members.map(memberId => {
-                    if (memberId.length === 20) {  // Assuming organization IDs are 20 characters long
-                        const organization = organizationMap[memberId];
-                        return {
-                            id: memberId,
-                            name: organization ? organization.org_name : 'Unknown'
-                        };
-                    } else {
-                        const user = userMap[memberId];
-                        return {
-                                                        id: memberId,
-                                                        name: user ? user.username : 'Unknown'
-                                                    };
-                                                }
-                                            })
-                                        }));
-                                    }
-                            
-                                    res.status(200).json(conversations);
-                                } catch (err) {
-                                    console.error('Error fetching conversations:', err);
-                                    res.status(500).json({ error: 'Something went wrong' });
-                                }
-                            });
+// Helper function to fetch data with retry logic using axios
+const fetchWithRetry = async (url, options, retries = 3) => {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await axios.get(url, options);
+            return response.data; // Assuming response is JSON
+        } catch (error) {
+            console.error(`Attempt ${i + 1} failed: ${error.message}`);
+            if (i === retries - 1) throw error;
+        }
+    }
+};
 
-
+// Function to get name by msg_id from userMap or organizationMap
+const getNameById = (msg_id, userMap, organizationMap) => {
+    const user = userMap[msg_id];
+    const organization = organizationMap[msg_id];
+    return user ? user.firstname : (organization ? organization.org_name : 'Unknown');
+};
 
 
 module.exports = router;

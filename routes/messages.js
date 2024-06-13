@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Message = require('../models/message');
 const Conversation = require('../models/conversations');
-const authenticate = require('../middleware/authentication');
+const authenticate = require('../middleware/authenticator')
 const axios = require('axios'); // Assuming you use axios for HTTP requests
 
 router.get('/:conversationId', async (req, res) => {
@@ -82,79 +82,66 @@ router.get('/:conversationId', async (req, res) => {
 //         res.status(500).json({ error: 'Something went wrong' });
 //     }
 // });
+
+
 router.post('/send-message/:conversationId', authenticate, async (req, res) => {
     const { conversationId } = req.params;
     const { message } = req.body;
-    const senderId = req.user.id;
-    const sender = req.user.username;
-    const senderType = req.user.id ? 'user' : 'organization'; // Assuming user.id indicates a user
-
-    if (!message) {
-        console.error('Message is required');
-        return res.status(400).json({ error: 'Message is required' });
-    }
+    const senderName = req.user.username;
+    const senderId = req.user.msg_id;
 
     try {
-        // Fetch the conversation to find the recipient
-        const conversation = await Conversation.findById(conversationId);
-        if (!conversation) {
-            return res.status(404).json({ error: 'Conversation not found' });
-        }
-
-        // Fetch organization data from the API
-        const response = await axios.get('https://api.fyndah.com/api/v1/organization', {
-            headers: { Authorization: `Bearer ${req.token}` } // Assuming the token is available in req.token
+        // Check if the conversation exists and the sender is a member
+        console.log('Searching for conversation:', conversationId, 'Sender:', senderId);
+        const conversation = await Conversation.findOne({
+            _id: conversationId,
+            members: { $in: [senderId] }
         });
 
-        const organizations = response.data.data;
-
+        if (!conversation) {
+            console.log('Conversation not found or sender is not a member');
+            return res.status(404).json({ error: 'Conversation not found or sender is not a member' });
+        }
+        
         // Find the recipient in the conversation members
-        const recipientId = conversation.members.find(member => member !== senderId.toString());
-
+        const recipientId = conversation.members.find(member => member !== senderId);
         if (!recipientId) {
+            console.log('Recipient not found');
             return res.status(400).json({ error: 'Recipient not found' });
         }
 
-        // Determine if the recipient is an organization or user
-        const recipientType = recipientId.length === 20 ? 'organization' : 'user'; // Assuming organization IDs are 20 characters long
+        // Create a new message
+        const newMessage = new Message({
+            sender: senderName,
+            conversationId,
+            recipient: recipientId,
+            senderId,
+            message
+        });
 
-        // Check if sender can send message to recipient based on sender and recipient types
-        if ((senderType === 'organization' && recipientType === 'user') ||
-            (senderType === 'user' && recipientType === 'organization') ||
-            (senderType === 'user' && recipientType === 'user')) {
+        // Save the message
+        const savedMessage = await newMessage.save();
+        const io = req.io;
+       io.to(conversationId).emit('receiveMessage', { senderId, message });
+        
+        // Emit a notification to the recipient
+        io.to(recipientId).emit('notification', { message: `New message from ${req.user.username}: ${message}` });
+        
+        // Update conversation metadata
+        conversation.lastMessage = savedMessage._id;
+        conversation.updatedAt = new Date();
+        await conversation.save();
 
-            // Sender is an organization sending to a user, or vice versa, or a user sending to another user
-            const newMessage = new Message({
-                sender,
-                senderId,
-                recipient: recipientId,
-                conversationId,
-                message,
-                timestamp: new Date()
-            });
-            await newMessage.save();
-
-            const io = req.io;
-            io.to(conversationId).emit('receiveMessage', { senderId, message });
-
-            // Emit a notification to the recipient
-            io.to(recipientId).emit('notification', { message: `New message from ${req.user.username}: ${message}` });
-
-            res.status(200).json(newMessage);
-        } else {
-            // Sender cannot send message to recipient
-            return res.status(403).json({ error: 'Sender is not allowed to send message to recipient' });
-        }
-    } catch (err) {
-        console.error('Error saving message:', err);
-        res.status(500).json({ error: 'Something went wrong' });
+        console.log('Message sent successfully:', savedMessage);
+        res.status(200).json(savedMessage);
+    } catch (error) {
+        console.error('Error sending message:', error.message);
+        res.status(500).json({ error: 'Failed to send message' });
     }
 });
 
 
-
-// Explicit setting route
-// 
+// Explicit setting route// 
 
 router.post('/messages/:messageId/read', authenticate, async (req, res) => {
     try {
@@ -196,27 +183,21 @@ router.post('/messages/:messageId/read', authenticate, async (req, res) => {
 
 
 // Toggling route
+// Toggling route
 router.post('/messages/:messageId/toggle-read', authenticate, async (req, res) => {
     try {
         const { messageId } = req.params;
-        const userId = req.user.id; // Ordinary user ID
-        const organizationId = req.user.msg_id; // Organization ID
-
-        // Log the IDs to debug
-        console.log('User ID:', userId);
-        console.log('Organization ID:', organizationId);
-
+        const userId = req.user.msg_id; // User ID (can be either user or organization)
+        
+        // Find the message by ID
         const message = await Message.findById(messageId);
 
         if (!message) {
             return res.status(404).json({ error: 'Message not found' });
         }
 
-        // Log the recipient of the message
-        console.log('Message Recipient:', message.recipient.toString());
-
-        // Check if the recipient is either the user or the organization
-        if (message.recipient.toString() === userId.toString() || message.recipient.toString() === organizationId.toString()) {
+        // Check if the authenticated user (user or organization) is the recipient
+        if (message.recipient.toString() === userId) {
             message.isReadByRecipient = !message.isReadByRecipient;
             await message.save();
             res.status(200).json(message);
@@ -253,13 +234,8 @@ router.get('/messages/unread', authenticate, async (req, res) => {
 router.post('/messages/:messageId/toggle-archive', authenticate, async (req, res) => {
     try {
         const { messageId } = req.params;
-        const userId = req.user.id; // Ordinary user ID
-        const organizationId = req.user.msg_id; // Organization ID
-
-        // Log the IDs to debug
-        console.log('User ID:', userId);
-        console.log('Organization ID:', organizationId);
-
+        const userId = req.user.msg_id; // User ID (can be either user or organization)
+        
         // Find the message by ID
         const message = await Message.findById(messageId);
 
@@ -267,49 +243,49 @@ router.post('/messages/:messageId/toggle-archive', authenticate, async (req, res
             return res.status(404).json({ error: 'Message not found' });
         }
 
-        // Determine if the user is the sender or the recipient and toggle the respective field
-        if (message.senderId.toString() === userId.toString() || message.senderId.toString() === organizationId) {
-            // Toggle archive status for the sender
-            message.isArchivedBySender = !message.isArchivedBySender;
-        } else if (message.recipient.toString() === userId.toString() || message.recipient.toString() === organizationId.toString()) {
-            // Toggle archive status for the recipient
-            message.isArchivedByRecipient = !message.isArchivedByRecipient;
+        // Determine if the user is the sender or recipient and toggle the respective field
+        if (message.senderId.toString() === userId || message.recipient.toString() === userId) {
+            if (message.senderId.toString() === userId) {
+                // Toggle archive status for the sender
+                message.isArchivedBySender = !message.isArchivedBySender;
+            }
+            if (message.recipient.toString() === userId) {
+                // Toggle archive status for the recipient
+                message.isArchivedByRecipient = !message.isArchivedByRecipient;
+            }
+            // Save the updated message
+            await message.save();
+            res.status(200).json(message);
         } else {
             return res.status(403).json({ error: 'You are not authorized to update this message' });
         }
-
-        // Save the updated message
-        await message.save();
-
-        res.status(200).json(message);
     } catch (error) {
         console.error('Error toggling message archive status:', error);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
 
+
 // Retrieve archived messages
 router.get('/messages/archived', authenticate, async (req, res) => {
-    const userId = req.user.id;
-    const organizationId = req.user.msg_id;
+    const userId = req.user.msg_id; // User ID (can be either user or organization)
 
     try {
-        // Find messages where the recipient or sender is either the user or the organization and are archived
+        // Find archived messages where the user is either the sender or recipient
         const archivedMessages = await Message.find({
             $or: [
                 { recipient: userId, isArchivedByRecipient: true },
-                { recipient: organizationId, isArchivedByRecipient: true },
-                { senderId: userId, isArchivedBySender: true },
-                { senderId: organizationId, isArchivedBySender: true }
+                { senderId: userId, isArchivedBySender: true }
             ]
         }).sort({ timestamp: -1 });
 
         res.status(200).json(archivedMessages);
     } catch (err) {
-        console.error(err);
+        console.error('Error retrieving archived messages:', err);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
+
 
 
 router.delete('/messages/:messageId', authenticate, async (req, res) => {
@@ -333,36 +309,28 @@ router.delete('/messages/:messageId', authenticate, async (req, res) => {
 router.post('/messages/:messageId/tag', authenticate, async (req, res) => {
     try {
         const { messageId } = req.params;
-        const userId = req.user.id.toString();
-        const organizationId = req.user.msg_id ? req.user.msg_id.toString() : null;
+        const userId = req.user.msg_id; // Assuming msg_id uniquely identifies users and organizations
         const { tags, category } = req.body;
 
-        // Debug logging
-        console.log(`User ID: ${userId}`);
-        console.log(`Organization ID: ${organizationId}`);
-        console.log(`Message ID: ${messageId}`);
-
+        // Find the message by ID
         const message = await Message.findById(messageId);
 
         if (!message) {
             return res.status(404).json({ error: 'Message not found' });
         }
 
-        // Debug logging
-        console.log(`Message Sender ID: ${message.senderId.toString()}`);
-        console.log(`Message Recipient ID: ${message.recipient.toString()}`);
-
-        // Determine if the user is the sender or recipient and update the appropriate fields
-        if (message.senderId.toString() === userId) {
+        // Check if the authenticated user is either the sender or recipient
+        if (message.senderId === userId) {
             if (tags) message.tagsBySender = tags;
             if (category) message.categoryBySender = category;
-        } else if (message.recipient.toString() === userId || (organizationId && message.recipient.toString() === organizationId)) {
+        } else if (message.recipient === userId) {
             if (tags) message.tagsByRecipient = tags;
             if (category) message.categoryByRecipient = category;
         } else {
             return res.status(403).json({ error: 'You are not authorized to update this message' });
         }
 
+        // Save the updated message
         await message.save();
 
         res.status(200).json(message);
@@ -374,18 +342,17 @@ router.post('/messages/:messageId/tag', authenticate, async (req, res) => {
 
 
 
+
 // Retrieve messages by tags
 router.get('/messages/tagged/:tag', authenticate, async (req, res) => {
-    const userId = req.user.id.toString();
-    const organizationId = req.user.msg_id ? req.user.msg_id.toString() : null;
+    const userId = req.user.msg_id; // Assuming msg_id uniquely identifies users and organizations
     const tag = req.params.tag;
 
     try {
         const taggedMessages = await Message.find({
             $or: [
                 { recipient: userId, tagsByRecipient: { $in: [tag] } },
-                { senderId: userId, tagsBySender: { $in: [tag] } },
-                { recipient: organizationId, tagsByRecipient: { $in: [tag] } }
+                { senderId: userId, tagsBySender: { $in: [tag] } }
             ]
         }).sort({ timestamp: -1 });
 
@@ -398,23 +365,21 @@ router.get('/messages/tagged/:tag', authenticate, async (req, res) => {
 
 // Retrieve messages cartegories
 router.get('/messages/category/:category', authenticate, async (req, res) => {
-    const userId = req.user.id.toString();
-    const organizationId = req.user.msg_id ? req.user.msg_id.toString() : null;
+    const userId = req.user.msg_id; // Assuming msg_id uniquely identifies users and organizations
     const category = req.params.category;
 
     try {
         // Query for messages where the user is either the sender or the recipient and matches the specified category
         const categorizedMessages = await Message.find({
             $or: [
-                { senderId: userId,  categoryBySender: { $in: category } }, // User is the sender
-                { recipient: userId, categoryByRecipient: { $in: category } }, // User is the recipient
-                { recipient: organizationId, categoryByRecipient: { $in: category } } // Organization is the recipient
+                { senderId: userId,  categoryBySender: { $in: [category] } }, // User is the sender
+                { recipient: userId, categoryByRecipient: { $in: [category] } } // User is the recipient
             ]
         }).sort({ timestamp: -1 });
 
         res.status(200).json(categorizedMessages);
     } catch (err) {
-        console.error(err);
+        console.error('Error retrieving categorized messages:', err);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
