@@ -29,7 +29,7 @@ mongoose.connect("mongodb+srv://bellsehr:password1234@bellsehr.bwuj4eh.mongodb.n
 //     }
 // };
 
-const Posts = async() => {
+const posts = async() => {
     try {
 
         // Clear existing posts before seeding new ones (optional)
@@ -45,4 +45,4 @@ const Posts = async() => {
 
 
 // seedPosts();
-Posts();
+posts();
