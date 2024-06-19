@@ -25,74 +25,18 @@ router.get('/:conversationId', async (req, res) => {
     }
 });
 
-// router.post('/send-message/:conversationId', authenticate, async (req, res) => {
-//     const { conversationId } = req.params;
-//     const { message } = req.body;
-//     const senderId = req.user.id;
-//     const sender = req.user.username;
-//     const senderType = req.user.msg_id ? 'organization' : 'user'; // Assuming msg_id indicates an organization
-
-//     if (!message) {
-//         console.error('Message is required');
-//         return res.status(400).json({ error: 'Message is required' });
-//     }
-
-//     try {
-//         // Fetch the conversation to find the recipient
-//         const conversation = await Conversation.findById(conversationId);
-//         if (!conversation) {
-//             return res.status(404).json({ error: 'Conversation not found' });
-//         }
-
-//         // Find the recipient in the conversation members
-//         const recipientId = conversation.members.find(member => member !== senderId);
-//         if (!recipientId) {
-//             return res.status(400).json({ error: 'Recipient not found' });
-//         }
-
-//         const recipientType = recipientId.length === 20 ? 'organization' : 'user'; // Assuming organization IDs are 20 characters long
-
-//         // Check if sender can send message to recipient based on sender and recipient types
-//         if ((senderType === 'organization' && recipientType === 'user') ||
-//             (senderType === 'user' && recipientType === 'organization')) {
-//             // Sender is an organization sending to a user or vice versa
-//             const newMessage = new Message({
-//                 sender,
-//                 senderId,
-//                 recipient: recipientId,
-//                 conversationId,
-//                 message,
-//                 timestamp: new Date()
-//             });
-//             await newMessage.save();
-
-//             const io = req.io;
-//             io.to(conversationId).emit('receiveMessage', { senderId, message });
-
-//             // Emit a notification to the recipient
-//             io.to(recipientId).emit('notification', { message: `New message from ${req.user.username}: ${message}` });
-
-//             res.status(200).json(newMessage);
-//         } else {
-//             // Sender cannot send message to recipient
-//             return res.status(403).json({ error: 'Sender is not allowed to send message to recipient' });
-//         }
-//     } catch (err) {
-//         console.error('Error saving message:', err);
-//         res.status(500).json({ error: 'Something went wrong' });
-//     }
-// });
-
-
 router.post('/send-message/:conversationId', authenticate, async (req, res) => {
     const { conversationId } = req.params;
     const { message } = req.body;
     const senderName = req.user.username;
-    const senderId = req.user.msg_id;
+    const senderId = req.user.org_msg_id ? req.user.org_msg_id : req.user.msg_id;
+
+    console.log('Received request to send message');
+    console.log('conversationId:', conversationId);
+    console.log('senderId:', senderId);
 
     try {
         // Check if the conversation exists and the sender is a member
-        console.log('Searching for conversation:', conversationId, 'Sender:', senderId);
         const conversation = await Conversation.findOne({
             _id: conversationId,
             members: { $in: [senderId] }
@@ -100,9 +44,11 @@ router.post('/send-message/:conversationId', authenticate, async (req, res) => {
 
         if (!conversation) {
             console.log('Conversation not found or sender is not a member');
+            console.log('Conversation:', conversation);
+            console.log('Sender ID:', senderId);
             return res.status(404).json({ error: 'Conversation not found or sender is not a member' });
         }
-        
+
         // Find the recipient in the conversation members
         const recipientId = conversation.members.find(member => member !== senderId);
         if (!recipientId) {
@@ -122,11 +68,11 @@ router.post('/send-message/:conversationId', authenticate, async (req, res) => {
         // Save the message
         const savedMessage = await newMessage.save();
         const io = req.io;
-       io.to(conversationId).emit('receiveMessage', { senderId, message });
-        
+        io.to(conversationId).emit('receiveMessage', { senderId, message });
+
         // Emit a notification to the recipient
         io.to(recipientId).emit('notification', { message: `New message from ${req.user.username}: ${message}` });
-        
+
         // Update conversation metadata
         conversation.lastMessage = savedMessage._id;
         conversation.updatedAt = new Date();
@@ -139,9 +85,6 @@ router.post('/send-message/:conversationId', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Failed to send message' });
     }
 });
-
-
-// Explicit setting route// 
 
 router.post('/messages/:messageId/read', authenticate, async (req, res) => {
     try {

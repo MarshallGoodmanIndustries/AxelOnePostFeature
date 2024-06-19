@@ -40,7 +40,8 @@ const authenticate = async (req, res, next) => {
             email: userProfile.email,
             username: userProfile.username,
             id: userProfile.id,
-            msg_id: userProfile.msg_id
+            msg_id: userProfile.msg_id,
+            org_msg_id: userProfile.org_msg_id
         };
         req.token = token;
 

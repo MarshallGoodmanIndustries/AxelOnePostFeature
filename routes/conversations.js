@@ -9,10 +9,10 @@ const axios = require('axios');
 const authenticate = require('../middleware/authenticator')
 
 // Create a new conversation
+
 router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
     let receiverId = req.params.receiverId.trim(); // Trim whitespace from receiverId
-    const senderId = req.user.msg_id;
-
+    const senderId = req.user.org_msg_id ? req.user.org_msg_id : req.user.msg_id;
 
     if (!senderId || !receiverId) {
         return res.status(400).json({ error: 'Both sender and receiver IDs are required' });
@@ -46,7 +46,7 @@ router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
 
 router.get('/myconversations', authenticate, async (req, res) => {
     try {
-        const userId = req.user.msg_id.toString();
+        const userId = req.user.org_msg_id ? req.user.org_msg_id.toString() : req.user.msg_id.toString();
         const options = {
             headers: { Authorization: `Bearer ${req.token}` },
             timeout: 10000
@@ -113,6 +113,7 @@ router.get('/myconversations', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
+
 
 // Helper function to fetch data with retry logic using axios
 const fetchWithRetry = async (url, options, retries = 3) => {
