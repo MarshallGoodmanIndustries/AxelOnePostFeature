@@ -11,6 +11,10 @@ const postSchema = new mongoose.Schema({
     image: {
         type: String
     },
+    orgmsg_id: {
+        type: String,
+        required: true
+    },
     organization: {
         type: String,
         required: true

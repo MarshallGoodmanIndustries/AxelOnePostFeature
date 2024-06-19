@@ -14,16 +14,74 @@ const WebSocket = require('ws');
 const wss = new WebSocket.Server({ port: 8080});
 
 // Create post
+// router.post('/post', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
+//     try {
+//         const { title, description} = req.body;
+//         const organizationId = req.user.organization_id
+//         console.log('req.user.email', req.user.email, req.user.id, req.user.username, req.user.organization_id);
+        
+//         // Debug log to check req.user
+//         console.log('req.user before creating post:', req.user.email);
+//         console.log('Request Body:', req.body);
+        
+//         // Optional image handling
+//         let imageUrl = '';
+//         if (req.file) {
+//             imageUrl = req.file.path; // Cloudinary URL
+//         }
+
+//         // Create new post
+//         const newPost = new Post({
+//             title,
+//             description,
+//             author: req.user.id,
+//             authorEmail: req.user.email,
+//             organization: organizationId,
+//             authorUsername: req.user.username,
+//             image: imageUrl // Add image URL to the post document
+//         });
+
+//         await newPost.save();
+
+//         res.status(201).json({ status: 'success', data: { post: newPost } });
+//     } catch (error) {
+//         console.error(error);
+//         res.status(500).json({ status: 'error', message: 'Internal server error' });
+//     }
+// });
+
+const axios = require('axios');
+
 router.post('/post', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
     try {
-        const { title, description} = req.body;
-        const organizationId = req.user.organization_id
-        console.log('req.user.email', req.user.email, req.user.id, req.user.username, req.user.organization_id);
-        
+        const { title, description } = req.body;
+        const organizationId = req.user.organization_id;
+
         // Debug log to check req.user
         console.log('req.user before creating post:', req.user.email);
         console.log('Request Body:', req.body);
-        
+
+        // Fetch organization details from the external API
+        const organizationResponse = await axios.get('https://api.fyndah.com/api/v1/organization', {
+            headers: { Authorization: `Bearer ${req.token}` },
+            timeout: 10000
+        });
+
+        // Log the complete organization response to debug
+        console.log('Complete Organization API Response:', organizationResponse.data);
+
+        // Extract the organizations array from the response
+        const organizations = organizationResponse.data.data;
+
+        // Find the organization in the array
+        const organization = organizations.find(org => org.id === parseInt(organizationId));
+
+        if (!organization) {
+            return res.status(404).json({ error: 'Organization not found' });
+        }
+
+        const orgmsg_id = organization.msg_id;
+
         // Optional image handling
         let imageUrl = '';
         if (req.file) {
@@ -37,6 +95,7 @@ router.post('/post', authenticate, checkOrganization, upload.single('image'), as
             author: req.user.id,
             authorEmail: req.user.email,
             organization: organizationId,
+            orgmsg_id: orgmsg_id,
             authorUsername: req.user.username,
             image: imageUrl // Add image URL to the post document
         });
@@ -45,10 +104,12 @@ router.post('/post', authenticate, checkOrganization, upload.single('image'), as
 
         res.status(201).json({ status: 'success', data: { post: newPost } });
     } catch (error) {
-        console.error(error);
+        console.error('Error creating post:', error);
         res.status(500).json({ status: 'error', message: 'Internal server error' });
     }
 });
+
+
 
 //fetch all post for an organization
 router.get("/myposts", authenticate, async (req, res) => {

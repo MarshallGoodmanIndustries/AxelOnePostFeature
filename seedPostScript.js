@@ -29,11 +29,11 @@ mongoose.connect("mongodb+srv://bellsehr:password1234@bellsehr.bwuj4eh.mongodb.n
 //     }
 // };
 
-const conversation = async() => {
+const message = async() => {
     try {
 
         // Clear existing posts before seeding new ones (optional)
-      await  Conversation.deleteMany({});
+      await  Message.deleteMany({});
 
         console.log('Data successfully deleted!');
         mongoose.connection.close();
@@ -45,4 +45,4 @@ const conversation = async() => {
 
 
 // seedPosts();
-conversation();
+message();
