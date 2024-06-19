@@ -5,7 +5,7 @@ const Conversation = require('../models/conversations');
 const authenticate = require('../middleware/authenticator')
 const axios = require('axios'); // Assuming you use axios for HTTP requests
 
-router.get('/:conversationId', async (req, res) => {
+router.get('/:conversationId', authenticate, async (req, res) => {
     try {
         const { conversationId } = req.params;
         console.log('Fetching messages for conversationId:', conversationId);

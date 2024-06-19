@@ -44,9 +44,10 @@ router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
     }
 });
 
-router.get('/myconversations', authenticate, async (req, res) => {
+router.get('/orgconversations/:org_msg_Id', authenticate, async (req, res) => {
+    const {org_msg_Id } = req.params;
+
     try {
-        const userId = req.user.org_msg_id ? req.user.org_msg_id.toString() : req.user.msg_id.toString();
         const options = {
             headers: { Authorization: `Bearer ${req.token}` },
             timeout: 10000
@@ -88,11 +89,11 @@ router.get('/myconversations', authenticate, async (req, res) => {
         console.log('User Map:', userMap);
         console.log('Organization Map:', organizationMap);
 
-        // Step 3: Fetch conversations for the authenticated user
-        const conversations = await Conversation.find({ members: userId }).sort({ updatedAt: -1 });
+        // Step 3: Fetch conversations for the organization
+        const conversations = await Conversation.find({ members: org_msg_Id }).sort({ updatedAt: -1 });
 
         if (!conversations || conversations.length === 0) {
-            return res.status(404).json({ error: 'No conversations found for this user' });
+            return res.status(404).json({ error: 'No conversations found for this organization' });
         }
 
         // Step 4: Map conversations to include member names dynamically
@@ -113,6 +114,79 @@ router.get('/myconversations', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
+
+
+router.get('/userconversations/:user_msg_Id', authenticate, async (req, res) => {
+    const user_msg_Id = req.params.user_msg_Id;
+
+    try {
+        const options = {
+            headers: { Authorization: `Bearer ${req.token}` },
+            timeout: 10000
+        };
+
+        let allUsers = [];
+        let allOrganizations = [];
+
+        // Fetch all users and organizations from the external API using axios
+        try {
+            const allUsersResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/users/all', options);
+            allUsers = allUsersResponse.data;
+            console.log('Fetched users:', allUsers);
+        } catch (error) {
+            console.error('Error fetching users:', error.message);
+            return res.status(500).json({ error: 'Failed to fetch users' });
+        }
+
+        try {
+            const allOrganizationsResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/organization', options);
+            allOrganizations = allOrganizationsResponse.data;
+            console.log('Fetched organizations:', allOrganizations);
+        } catch (error) {
+            console.error('Error fetching organizations:', error.message);
+            return res.status(500).json({ error: 'Failed to fetch organizations' });
+        }
+
+        // Create maps for quick lookup
+        const userMap = allUsers.reduce((map, user) => {
+            map[user.msg_id] = user;
+            return map;
+        }, {});
+
+        const organizationMap = allOrganizations.reduce((map, org) => {
+            map[org.msg_id] = org;
+            return map;
+        }, {});
+
+        console.log('User Map:', userMap);
+        console.log('Organization Map:', organizationMap);
+
+        // Fetch conversations for the authenticated user
+        const conversations = await Conversation.find({ members: user_msg_Id }).sort({ updatedAt: -1 });
+
+        if (!conversations || conversations.length === 0) {
+            return res.status(404).json({ error: 'No conversations found for this user' });
+        }
+
+        // Map conversations to include member names dynamically
+        const results = conversations.map(convo => ({
+            _id: convo._id,
+            members: convo.members.map(member => ({
+                id: member,
+                name: getNameById(member, userMap, organizationMap)
+            })),
+            updatedAt: convo.updatedAt,
+            __v: convo.__v
+        }));
+
+        // Return the results
+        res.status(200).json(results);
+    } catch (err) {
+        console.error('Error fetching conversations:', err.message);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+});
+
 
 
 // Helper function to fetch data with retry logic using axios
