@@ -45,7 +45,7 @@ router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
 });
 
 router.get('/orgconversations/:org_msg_Id', authenticate, async (req, res) => {
-    const {org_msg_Id } = req.params;
+    const { org_msg_Id } = req.params;
 
     try {
         const options = {
@@ -96,13 +96,18 @@ router.get('/orgconversations/:org_msg_Id', authenticate, async (req, res) => {
             return res.status(404).json({ error: 'No conversations found for this organization' });
         }
 
-        // Step 4: Map conversations to include member names dynamically
+        // Step 4: Map conversations to include member names, logos, and profile photo paths dynamically
         const results = conversations.map(convo => ({
             _id: convo._id,
-            members: convo.members.map(member => ({
-                id: member,
-                name: getNameById(member, userMap, organizationMap)
-            })),
+            members: convo.members.map(member => {
+                const memberInfo = getNameById(member, userMap, organizationMap);
+                return {
+                    id: member,
+                    name: memberInfo.name,
+                    profilePhotoPath: memberInfo.profilePhotoPath,
+                    logo: memberInfo.logo
+                };
+            }),
             updatedAt: convo.updatedAt,
             __v: convo.__v
         }));
@@ -114,7 +119,6 @@ router.get('/orgconversations/:org_msg_Id', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
 
 router.get('/userconversations/:user_msg_Id', authenticate, async (req, res) => {
     const user_msg_Id = req.params.user_msg_Id;
@@ -168,13 +172,18 @@ router.get('/userconversations/:user_msg_Id', authenticate, async (req, res) => 
             return res.status(404).json({ error: 'No conversations found for this user' });
         }
 
-        // Map conversations to include member names dynamically
+        // Map conversations to include member names, logos, and profile photo paths dynamically
         const results = conversations.map(convo => ({
             _id: convo._id,
-            members: convo.members.map(member => ({
-                id: member,
-                name: getNameById(member, userMap, organizationMap)
-            })),
+            members: convo.members.map(member => {
+                const memberInfo = getNameById(member, userMap, organizationMap);
+                return {
+                    id: member,
+                    name: memberInfo.name,
+                    profilePhotoPath: memberInfo.profilePhotoPath,
+                    logo: memberInfo.logo
+                };
+            }),
             updatedAt: convo.updatedAt,
             __v: convo.__v
         }));
@@ -203,10 +212,20 @@ const fetchWithRetry = async (url, options, retries = 3) => {
 };
 
 // Function to get name by msg_id from userMap or organizationMap
-const getNameById = (msg_id, userMap, organizationMap) => {
-    const user = userMap[msg_id];
-    const organization = organizationMap[msg_id];
-    return user ? user.firstname : (organization ? organization.org_name : 'Unknown');
+const getNameById = (id, userMap, organizationMap) => {
+    if (userMap[id]) {
+        return {
+            name: userMap[id].name,
+            profilePhotoPath: userMap[id].profile_photo_path
+        };
+    } else if (organizationMap[id]) {
+        return {
+            name: organizationMap[id].name,
+            logo: organizationMap[id].logo
+        };
+    } else {
+        return { name: 'Unknown' };
+    }
 };
 
 
