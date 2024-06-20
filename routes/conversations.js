@@ -215,12 +215,12 @@ const fetchWithRetry = async (url, options, retries = 3) => {
 const getNameById = (id, userMap, organizationMap) => {
     if (userMap[id]) {
         return {
-            name: userMap[id].name,
+            name: userMap[id].username,
             profilePhotoPath: userMap[id].profile_photo_path
         };
     } else if (organizationMap[id]) {
         return {
-            name: organizationMap[id].name,
+            name: organizationMap[id].org_name,
             logo: organizationMap[id].logo
         };
     } else {
