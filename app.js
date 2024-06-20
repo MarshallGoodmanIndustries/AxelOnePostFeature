@@ -139,10 +139,27 @@ const io = socketIo(server, {
 
 // Middleware
 app.use(bodyParser.json());
-app.use(cors({ 
-    origin: 'http://localhost:5173', // Allowing frontend from localhost:5173
-    credentials: true 
-}));
+
+const allowedOrigins = ['https://fyndah.vercel.app', 'https://fyndah.com', 'http://localhost:5173', 'http://localhost:5174'];
+
+const corsOptions = {
+    origin: function(origin, callback) {
+        if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+            console.log(`CORS request from origin: ${origin} - Allowed`);
+            callback(null, true);
+        } else {
+            console.log(`CORS request from origin: ${origin} - Not allowed`);
+            callback(new Error('Not allowed by CORS'));
+        }
+    },
+    methods: ['GET', 'POST', 'PUT', 'DELETE'],
+    allowedHeaders: ['Content-Type', 'Authorization'],
+    credentials: true,
+    optionsSuccessStatus: 200  // Some legacy browsers choke on 204
+};
+
+app.use(cors(corsOptions));
+
 
 // Routes
 app.use('/api', postRouter);
