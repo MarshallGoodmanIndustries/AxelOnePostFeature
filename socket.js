@@ -4,7 +4,7 @@ module.exports = {
     init: httpServer => {
         io = require("socket.io")(httpServer, {
             cors: {
-              origin: "https://axelonepostfeature.onrender.com",
+              origin: "*",
               methods: ["GET", "POST"],
               transports: ['websocket', 'polling'],
               credentials: true
