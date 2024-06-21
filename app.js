@@ -9,6 +9,7 @@ const postRouter = require('./routes/postRoute');
 const listingRouter = require('./routes/listingRoute');
 const conversationRouter = require('./routes/conversations');
 const messageRouter = require('./routes/messages');
+const Conversation = require('./models/conversations')
 const authenticate = require('./middleware/authenticate');
 const socketAuthenticate = require('./middleware/socketAuthenticate');
 
@@ -66,7 +67,7 @@ io.on('connection', (socket) => {
         } else {
             userId = socket.user.msg_id; // Use msg_id if org_msg_id is not available
         }
-        
+
         socket.join(roomId);
         console.log(`${userId} joined room: ${roomId}`);
         socket.to(roomId).emit('userJoined', { userId });
