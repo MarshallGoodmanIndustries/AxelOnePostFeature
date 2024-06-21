@@ -162,8 +162,8 @@ io.use(socketAuthenticate);
         }
     });
 
-    socket.on('disconnect', () => {
-        console.log('A user disconnected', socket.id);
-    });
+    // socket.on('disconnect', () => {
+    //     console.log('A user disconnected', socket.id);
+    // });
       
     });
