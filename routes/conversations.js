@@ -3,13 +3,44 @@
 const express = require('express');
 const router = express.Router();
 const Conversation = require('../models/conversations');
+const Message = require('../models/message')
 const NodeCache = require("node-cache");
 const profileCache = new NodeCache({ stdTTL: 600 }); // Cache for 10 minutes
 const axios = require('axios');
 const authenticate = require('../middleware/authenticator')
 
-// Create a new conversation
+// Middleware to exclude soft deleted conversations and messages
+async function excludeSoftDeleted(req, res, next) {
+    try {
+        const userId = req.user.msg_id;
 
+        req.userId = userId;
+
+        next();
+    } catch (error) {
+        console.error('Error excluding soft deleted:', error);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+}
+
+// Middleware to exclude soft deleted conversations and messages for organizations
+async function excludeSoftDeletedForOrg(req, res, next) {
+    try {
+        const orgId = req.user.org_msg_id;
+
+        if (!orgId) {
+            return res.status(400).json({ error: 'Organization ID not found' });
+        }
+
+        req.orgId = orgId;
+        next();
+    } catch (error) {
+        console.error('Error excluding soft deleted for organizations:', error);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+}
+
+// Create a new conversation
 router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
     let receiverId = req.params.receiverId.trim(); // Trim whitespace from receiverId
     const senderId = req.user.org_msg_id ? req.user.org_msg_id : req.user.msg_id;
@@ -44,8 +75,10 @@ router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
     }
 });
 
-router.get('/orgconversations/:org_msg_Id', authenticate, async (req, res) => {
+// Route to get conversations for an organization excluding soft deleted ones
+router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForOrg, async (req, res) => {
     const { org_msg_Id } = req.params;
+    const orgId = req.orgId;
 
     try {
         const options = {
@@ -90,26 +123,40 @@ router.get('/orgconversations/:org_msg_Id', authenticate, async (req, res) => {
         console.log('Organization Map:', organizationMap);
 
         // Step 3: Fetch conversations for the organization
-        const conversations = await Conversation.find({ members: org_msg_Id }).sort({ updatedAt: -1 });
+        const conversations = await Conversation.find({ 
+            members: org_msg_Id,
+            $or: [
+                { deletedForSender: { $ne: orgId } },
+                { deletedForRecipient: { $ne: orgId } }
+            ]
+        }).sort({ updatedAt: -1 });
 
         if (!conversations || conversations.length === 0) {
             return res.status(404).json({ error: 'No conversations found for this organization' });
         }
 
-        // Step 4: Map conversations to include member names, logos, and profile photo paths dynamically
-        const results = conversations.map(convo => ({
-            _id: convo._id,
-            members: convo.members.map(member => {
-                const memberInfo = getNameById(member, userMap, organizationMap);
-                return {
-                    id: member,
-                    name: memberInfo.name,
-                    profilePhotoPath: memberInfo.profilePhotoPath,
-                    logo: memberInfo.logo
-                };
-            }),
-            updatedAt: convo.updatedAt,
-            __v: convo.__v
+        // Step 4: Map conversations to include member names, logos, profile photo paths dynamically
+        const results = await Promise.all(conversations.map(async (convo) => {
+            // Find last message for the conversation
+            const lastMessage = await Message.findOne({ conversationId: convo._id })
+                .sort({ createdAt: -1 })
+                .select('message createdAt');
+
+            return {
+                _id: convo._id,
+                members: convo.members.map(member => {
+                    const memberInfo = getNameById(member, userMap, organizationMap);
+                    return {
+                        id: member,
+                        name: memberInfo.name,
+                        profilePhotoPath: memberInfo.profilePhotoPath,
+                        logo: memberInfo.logo
+                    };
+                }),
+                updatedAt: convo.updatedAt,
+                lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
+                __v: convo.__v
+            };
         }));
 
         // Step 5: Return the results
@@ -120,9 +167,10 @@ router.get('/orgconversations/:org_msg_Id', authenticate, async (req, res) => {
     }
 });
 
-router.get('/userconversations/:user_msg_Id', authenticate, async (req, res) => {
-    const user_msg_Id = req.params.user_msg_Id;
 
+router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, async (req, res) => {
+    const user_msg_Id = req.params.user_msg_Id;
+    const userId = req.userId;
     try {
         const options = {
             headers: { Authorization: `Bearer ${req.token}` },
@@ -166,26 +214,40 @@ router.get('/userconversations/:user_msg_Id', authenticate, async (req, res) => 
         console.log('Organization Map:', organizationMap);
 
         // Fetch conversations for the authenticated user
-        const conversations = await Conversation.find({ members: user_msg_Id }).sort({ updatedAt: -1 });
+        const conversations = await Conversation.find({ 
+            members: user_msg_Id, 
+            $or: [
+                { deletedForSender: { $ne: userId } },
+                { deletedForRecipient: { $ne: userId } }
+            ]
+        }).sort({ updatedAt: -1 });
 
         if (!conversations || conversations.length === 0) {
             return res.status(404).json({ error: 'No conversations found for this user' });
         }
 
         // Map conversations to include member names, logos, and profile photo paths dynamically
-        const results = conversations.map(convo => ({
-            _id: convo._id,
-            members: convo.members.map(member => {
-                const memberInfo = getNameById(member, userMap, organizationMap);
-                return {
-                    id: member,
-                    name: memberInfo.name,
-                    profilePhotoPath: memberInfo.profilePhotoPath,
-                    logo: memberInfo.logo
-                };
-            }),
-            updatedAt: convo.updatedAt,
-            __v: convo.__v
+        const results = await Promise.all(conversations.map(async (convo) => {
+            // Find last message for the conversation
+            const lastMessage = await Message.findOne({ conversationId: convo._id })
+                .sort({ createdAt: -1 })
+                .select('message createdAt');
+
+            return {
+                _id: convo._id,
+                members: convo.members.map(member => {
+                    const memberInfo = getNameById(member, userMap, organizationMap);
+                    return {
+                        id: member,
+                        name: memberInfo.name,
+                        profilePhotoPath: memberInfo.profilePhotoPath,
+                        logo: memberInfo.logo
+                    };
+                }),
+                updatedAt: convo.updatedAt,
+                lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
+                __v: convo.__v
+            };
         }));
 
         // Return the results
@@ -195,8 +257,6 @@ router.get('/userconversations/:user_msg_Id', authenticate, async (req, res) => 
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
-
 
 // Helper function to fetch data with retry logic using axios
 const fetchWithRetry = async (url, options, retries = 3) => {

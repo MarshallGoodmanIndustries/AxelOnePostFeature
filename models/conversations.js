@@ -8,7 +8,14 @@ const ConversationSchema = new mongoose.Schema({
     lastMessage: { 
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Message' 
-    }
+    },
+    deletedForSender: { 
+       type: String, default: null 
+    },
+    deletedForRecipient: { 
+        type: String, default: null 
+    },
+    updatedAt: { type: Date, default: Date.now }
 }, { 
     timestamps: true 
 });

@@ -1,13 +1,6 @@
 const mongoose = require('mongoose');
 
 const messageSchema = new mongoose.Schema({
-  // listingId: {
-  //     type: String,
-  //     required: false
-  // },
-  // conversationId: { 
-  //   type: mongoose.Schema.Types.ObjectId, ref: 'Conversation', required: true, index: true 
-  // },
   senderId:{
     type: String,
     required: true
@@ -47,6 +40,12 @@ const messageSchema = new mongoose.Schema({
   isReadByRecipient: {
     type: Boolean,
     default: false
+  },
+  deletedForSender: { 
+    type: String, default: null 
+  },
+  deletedForRecipient: { 
+    type: String, default: null 
   },
   tagsBySender: {
     type: [String],

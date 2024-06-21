@@ -5,12 +5,50 @@ const Conversation = require('../models/conversations');
 const authenticate = require('../middleware/authenticator')
 const axios = require('axios'); // Assuming you use axios for HTTP requests
 
-router.get('/:conversationId', authenticate, async (req, res) => {
+// Middleware to exclude soft deleted conversations and messages
+async function excludeSoftDeleted(req, res, next) {
+    try {
+        const userId = req.user.msg_id;
+
+        req.userId = userId;
+
+        next();
+    } catch (error) {
+        console.error('Error excluding soft deleted:', error);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+}
+
+// Middleware to exclude soft deleted conversations and messages for organizations
+async function excludeSoftDeletedForOrg(req, res, next) {
+    try {
+        const orgId = req.user.org_msg_id;
+
+        req.orgId = orgId;
+
+        next();
+    } catch (error) {
+        console.error('Error excluding soft deleted for organizations:', error);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+}
+
+// Route to get messages of a conversation excluding soft deleted ones
+
+router.get('/:conversationId', authenticate, excludeSoftDeleted, async (req, res) => {
     try {
         const { conversationId } = req.params;
+        const { userId } = req;
+
         console.log('Fetching messages for conversationId:', conversationId);
 
-        const messages = await Message.find({ conversationId }).sort({ createdAt: 1 });
+        const messages = await Message.find({ 
+            conversationId,
+            $or: [
+                { deletedForSender: { $ne: userId } },
+                { deletedForRecipient: { $ne: userId } }
+            ] 
+        }).sort({ createdAt: 1 });
 
         // Generate the welcome message
         const welcomeMessage = {
@@ -19,7 +57,7 @@ router.get('/:conversationId', authenticate, async (req, res) => {
             sender: 'System',
             recipient: null, // or any default value, if you don't use recipient for system messages
             senderId: 'system',
-            message: 'Welcome to the conversation!',
+            message: 'Welcome! Start typing below to send a message. Fyndah wishes you the best experience!',
             createdAt: new Date(),
             isReadByRecipient: true // Mark the welcome message as read
         };
@@ -40,7 +78,49 @@ router.get('/:conversationId', authenticate, async (req, res) => {
     }
 });
 
+// Route to get messages of a conversation for an organization excluding soft deleted ones
+router.get('orgmessages/:conversationId', authenticate, excludeSoftDeletedForOrg, async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const { orgId } = req;
 
+        console.log('Fetching messages for conversationId:', conversationId);
+
+        const messages = await Message.find({ 
+            conversationId,
+            $or: [
+                { deletedForSender: { $ne: orgId } },
+                { deletedForRecipient: { $ne: orgId } }
+            ]
+        }).sort({ createdAt: 1 });
+
+        // Generate the welcome message
+        const welcomeMessage = {
+            _id: 'welcome-message',
+            conversationId: conversationId,
+            sender: 'System',
+            recipient: null, // or any default value, if you don't use recipient for system messages
+            senderId: 'system',
+            message: 'Welcome! Start typing below to send a message. Fyndah wishes you the best experience!',
+            createdAt: new Date(),
+            isReadByRecipient: true // Mark the welcome message as read
+        };
+
+        // Insert the welcome message at the beginning of the messages array
+        const allMessages = [welcomeMessage, ...messages];
+
+        if (messages.length === 0) {
+            console.log('No messages found for conversationId:', conversationId);
+        } else {
+            console.log('Messages found:', messages);
+        }
+
+        res.json(allMessages);
+    } catch (err) {
+        console.error('Error fetching messages:', err);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+});
 
 // router.post('/send-message/:conversationId', authenticate, async (req, res) => {
 //     const { conversationId } = req.params;
@@ -234,8 +314,6 @@ router.post('/send-message/user/:conversationId', authenticate, async (req, res)
     }
 });
 
-
-
 router.post('/user/messages/read', authenticate, async (req, res) => {
     try {
         const { messageIds, isRead } = req.body;
@@ -411,8 +489,6 @@ router.get('/org/messages/unread', authenticate, async (req, res) => {
 });
 
 
-
-
 // Route to toggle archive status
 router.post('/messages/:messageId/toggle-archive', authenticate, async (req, res) => {
     try {
@@ -471,7 +547,7 @@ router.get('/messages/archived', authenticate, async (req, res) => {
 
 
 
-router.delete('/messages/:messageId', authenticate, async (req, res) => {
+router.delete('/delete/:messageId', authenticate, async (req, res) => {
     try {
         const { messageId } = req.params;
 
@@ -484,6 +560,91 @@ router.delete('/messages/:messageId', authenticate, async (req, res) => {
         res.status(200).json({ message: 'Message deleted successfully' });
     } catch (error) {
         console.error('Error deleting message:', error);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+});
+
+// Route to soft delete a conversation and its messages for a sender or recipient
+router.delete('/delete/conversation/:conversationId', authenticate, async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const userId = req.user.msg_id;
+
+        // Find the conversation
+        const conversation = await Conversation.findById(conversationId);
+
+        if (!conversation) {
+            return res.status(404).json({ error: 'Conversation not found' });
+        }
+
+        // Determine if the user is the sender or recipient
+        const isSender = conversation.members.includes(userId);
+        if (!isSender) {
+            return res.status(403).json({ error: 'You are not authorized to delete this conversation' });
+        }
+
+        // Soft delete the conversation for the sender or recipient
+        if (conversation.members[0] === userId) {
+            conversation.deletedForSender = userId;
+        } else if (conversation.members[1] === userId) {
+            conversation.deletedForRecipient = userId;
+        }
+
+        await conversation.save();
+
+        // Soft delete the messages for the sender or recipient
+        const updateField = conversation.members[0] === userId ? 'deletedForSender' : 'deletedForRecipient';
+        await Message.updateMany(
+            { conversationId },
+            { $set: { [updateField]: userId } }
+        );
+
+        res.status(200).json({ message: 'Conversation and its messages soft deleted successfully' });
+    } catch (error) {
+        console.error('Error soft deleting conversation:', error);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+});
+
+
+// Route to soft delete a conversation and its messages for an organization as sender or recipient
+router.delete('/delete/org/conversation/:conversationId', authenticate, async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const orgId = req.user.org_msg_id;
+
+        // Find the conversation
+        const conversation = await Conversation.findById(conversationId);
+
+        if (!conversation) {
+            return res.status(404).json({ error: 'Conversation not found' });
+        }
+
+        // Determine if the organization is the sender or recipient
+        const isMember = conversation.members.includes(orgId);
+        if (!isMember) {
+            return res.status(403).json({ error: 'You are not authorized to delete this conversation' });
+        }
+
+        // Soft delete the conversation for the sender or recipient
+        if (conversation.members[0] === orgId) {
+            conversation.deletedForSender = orgId;
+        } else if (conversation.members[1] === orgId) {
+            conversation.deletedForRecipient = orgId;
+        }
+
+        await conversation.save();
+
+        // Soft delete the messages for the sender or recipient
+        const updateField = conversation.members[0] === orgId ? 'deletedForSender' : 'deletedForRecipient';
+        await Message.updateMany(
+            { conversationId },
+            { $set: { [updateField]: orgId } }
+        );
+
+        res.status(200).json({ message: 'Conversation and its messages soft deleted successfully' });
+    } catch (error) {
+        console.error('Error soft deleting conversation:', error);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
