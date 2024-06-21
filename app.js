@@ -56,17 +56,24 @@ mongoose.connect(process.env.MONGO_URI).then(() => {
 io.use(socketAuthenticate);
 
 // Socket.IO connection handler
-io.on('connection', async (socket) => {
+io.on('connection', (socket) => {
     console.log('A user connected', socket.id);
 
-    socket.on('joinRoom', ({ roomId, userId }) => {
+    socket.on('joinRoom', ({ roomId }) => {
+        let userId;
+        if (socket.user.org_msg_id) {
+            userId = socket.user.org_msg_id; // Use org_msg_id if available
+        } else {
+            userId = socket.user.msg_id; // Use msg_id if org_msg_id is not available
+        }
+        
         socket.join(roomId);
         console.log(`${userId} joined room: ${roomId}`);
         socket.to(roomId).emit('userJoined', { userId });
     });
 
     socket.on('sendMessage', async ({ roomId, message }, callback) => {
-        const senderId = socket.user.username; // Get sender ID from authenticated user
+        const senderId = socket.user.org_msg_id || socket.user.msg_id || socket.user.id; // Priority on org_msg_id
         console.log(`Message from ${senderId} in room ${roomId}: ${message}`);
         
         try {
@@ -107,4 +114,3 @@ const PORT = process.env.PORT || 3000;
 server.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
-

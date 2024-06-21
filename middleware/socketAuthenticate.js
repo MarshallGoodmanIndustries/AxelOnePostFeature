@@ -20,7 +20,9 @@ const socketAuthenticate = async (socket, next) => {
             ...decoded,
             email: response.data.data.user.email,
             username: response.data.data.user.username,
-            id: response.data.data.user.id
+            id: response.data.data.user.id,
+            msg_id: userProfile.msg_id,
+            org_msg_id: userProfile.org_msg_id
         };
         next();
     } catch (error) {
