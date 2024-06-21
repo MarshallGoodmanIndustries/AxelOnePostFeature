@@ -116,10 +116,12 @@ const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 
-// Socket.IO authentication middleware
-io.use(socketAuthenticate);
+
 
 const io = require("./socket").init(server);
+
+// Socket.IO authentication middleware
+io.use(socketAuthenticate);
     io.on("connection", (socket) => {
         console.log("Client connected");
        socket.on('joinRoom', ({ conversationId }) => {
