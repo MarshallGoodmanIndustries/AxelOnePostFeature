@@ -116,7 +116,52 @@ const server = app.listen(PORT, () => {
     console.log(`Server running on port ${PORT}`);
 });
 
+// Socket.IO authentication middleware
+io.use(socketAuthenticate);
+
 const io = require("./socket").init(server);
     io.on("connection", (socket) => {
-      console.log("Client connected");
+        console.log("Client connected");
+       socket.on('joinRoom', ({ conversationId }) => {
+                    let userId;
+                    if (socket.user.org_msg_id) {
+                        userId = socket.user.org_msg_id; // Use org_msg_id if available
+                    } else {
+                        userId = socket.user.msg_id; // Use msg_id if org_msg_id is not available
+                    }
+            
+                    socket.join(conversationId);
+                    console.log(`${userId} joined room: ${conversationId}`);
+                    socket.to(conversationId).emit('userJoined', { userId });
+                });
+                socket.on('sendMessage', async ({ conversationId, message }, callback) => {
+        const senderId = socket.user.org_msg_id || socket.user.msg_id; // Priority on org_msg_id
+        console.log(`Message from ${senderId} in room ${conversationId}: ${message}`);
+        
+        try {
+            // Fetch the conversation to get the recipient
+            const conversation = await Conversation.findById(conversationId);
+            if (!conversation) {
+                throw new Error('Conversation not found');
+            }
+            
+            const recipient = conversation.members.find(memberId => memberId !== senderId);
+
+            // Save the message to the database
+            await sendMessage({ sender: senderId, recipient, conversationId: roomId, message });
+
+            // Emit the message to other users in the room
+            socket.to(conversationId).emit('receiveMessage', { sender: senderId, message });
+           
+            callback(null, { success: true });
+        } catch (error) {
+            console.error('Error sending message:', error);
+            callback(error);
+        }
+    });
+
+    socket.on('disconnect', () => {
+        console.log('A user disconnected', socket.id);
+    });
+      
     });
