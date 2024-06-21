@@ -89,7 +89,7 @@ router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForO
         let allUsers = [];
         let allOrganizations = [];
 
-        // Step 1: Fetch all users and organizations from the external API using axios
+        // Fetch all users and organizations from the external API using axios
         try {
             const allUsersResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/users/all', options);
             allUsers = allUsersResponse.data;
@@ -108,7 +108,7 @@ router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForO
             return res.status(500).json({ error: 'Failed to fetch organizations' });
         }
 
-        // Step 2: Create maps for quick lookup
+        // Create maps for quick lookup
         const userMap = allUsers.reduce((map, user) => {
             map[user.msg_id] = user;
             return map;
@@ -122,7 +122,7 @@ router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForO
         console.log('User Map:', userMap);
         console.log('Organization Map:', organizationMap);
 
-        // Step 3: Fetch conversations for the organization
+        // Fetch conversations for the organization
         const conversations = await Conversation.find({ 
             members: org_msg_Id,
             $or: [
@@ -135,7 +135,20 @@ router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForO
             return res.status(404).json({ error: 'No conversations found for this organization' });
         }
 
-        // Step 4: Map conversations to include member names, logos, profile photo paths dynamically
+        // Find unread messages for the recipient
+        const unreadMessages = await Message.find({ recipient: orgId, isReadByRecipient: false });
+
+        // Group unread messages by conversation ID and count them
+        const unreadMessagesByConversation = unreadMessages.reduce((acc, message) => {
+            const { conversationId } = message;
+            if (!acc[conversationId]) {
+                acc[conversationId] = 0;
+            }
+            acc[conversationId]++;
+            return acc;
+        }, {});
+
+        // Map conversations to include member names, logos, profile photo paths dynamically
         const results = await Promise.all(conversations.map(async (convo) => {
             // Find last message for the conversation
             const lastMessage = await Message.findOne({ conversationId: convo._id })
@@ -155,11 +168,12 @@ router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForO
                 }),
                 updatedAt: convo.updatedAt,
                 lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
+                unreadCount: unreadMessagesByConversation[convo._id] || 0,
                 __v: convo.__v
             };
         }));
 
-        // Step 5: Return the results
+        // Return the results with total unread conversations count
         res.status(200).json(results);
     } catch (err) {
         console.error('Error fetching conversations:', err.message);
