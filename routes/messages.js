@@ -3,7 +3,6 @@ const router = express.Router();
 const Message = require('../models/message');
 const Conversation = require('../models/conversations');
 const authenticate = require('../middleware/authenticator')
-const axios = require('axios'); // Assuming you use axios for HTTP requests
 
 // Middleware to exclude soft deleted conversations and messages
 async function excludeSoftDeleted(req, res, next) {
@@ -247,7 +246,6 @@ router.post('/send-message/org/:conversationId', authenticate, async (req, res) 
         res.status(500).json({ error: 'Failed to send message' });
     }
 });
-
 
 router.post('/send-message/user/:conversationId', authenticate, async (req, res) => {
     const { conversationId } = req.params;
@@ -697,8 +695,6 @@ router.post('/messages/:messageId/tag', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
-
 
 
 // Retrieve messages by tags

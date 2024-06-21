@@ -1,68 +1,76 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Real-Time Notifications</title>
-    
-    <style>
-        #notifications {
-            position: fixed;
-            bottom: 10px;
-            right: 10px;
-            width: 300px;
-            max-width: 100%;
-            z-index: 1000;
-        }
-        .notification {
-            background-color: #444;
-            color: white;
-            padding: 10px;
-            margin-bottom: 10px;
-            border-radius: 5px;
-            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
-        }
-    </style>
-    <script src="https://cdn.jsdelivr.net/npm/socket.io-client/dist/socket.io.js"></script>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Opulence Socket.IO Client</title>
 </head>
 <body>
+  <div id="root"></div>
+  <script src="https://cdn.jsdelivr.net/npm/socket.io-client@4.0.0/dist/socket.io.min.js"></script>
+  <script src="https://unpkg.com/react/umd/react.production.min.js"></script>
+  <script src="https://unpkg.com/react-dom/umd/react-dom.production.min.js"></script>
+  <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+  <script type="text/babel">
 
-    <div>Hello, Notification centre</div>
-    <div id="notifications"></div>
-    <script>
+    const { useEffect } = React;
+
+    const ChatComponent = () => {
+      useEffect(() => {
+        console.log("Component Mounted");
+        
+        const token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5meW5kYWguY29tL2FwaS92MS9hdXRoL2xvZ2luIiwiaWF0IjoxNzE5MDA0MDE1LCJleHAiOjE3MTkwMDc2MTUsIm5iZiI6MTcxOTAwNDAxNSwianRpIjoianVUWnBVQ1dXOWtHS2o0NSIsInN1YiI6IjQiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.bOJePeMPelW3ZIAo9aJgqHlucem_S57HnEW_MTuTBj4";
+
+        console.log("Creating socket with token:", token);
         const socket = io('http://localhost:3000', {
-            query: { token: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5meW5kYWguY29tL2FwaS92MS9hdXRoL2xvZ2luIiwiaWF0IjoxNzE4OTg0NzYzLCJleHAiOjE3MTg5ODgzNjMsIm5iZiI6MTcxODk4NDc2MywianRpIjoiOU9JamNSVHA2Nm85Y0M3YSIsInN1YiI6IjQiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.YeD4VcOwmojJZ-MQQzCA8qKk_qUnykhEgwcQwG1lnUg' }
+            query: { token },
+            transports: ['websocket'], // Ensure we are using websockets
+            reconnectionAttempts: 3, // Retry connecting 3 times
         });
 
+        console.log("Socket created:", socket);
+
         socket.on('connect', () => {
-            console.log('Connected to the server with socket ID:', socket.id);
+          console.log('Connected to the server');
+          socket.emit('joinRoom', { conversationId: '66755f77b28adad4d20f939b' });
+        });
 
-            // Join a room (you would get the room ID from your application logic)
-            socket.emit('joinRoom', { conversationId: '66755901161d9da4c145a081', userId: '0dU2Pkg6xZH5PoeyKcwn' });
-
-            // Listen for notifications
-            socket.on('notification', (data) => {
-                showNotification(data.message);
-            });
+        socket.on('new_message', (data) => {
+          console.log('New message received:', data);
         });
 
         socket.on('disconnect', () => {
-            console.log('Disconnected from the server');
+          console.log('Disconnected from the server');
         });
 
-        function showNotification(message) {
-            const notificationsDiv = document.getElementById('notifications');
-            const notification = document.createElement('div');
-            notification.className = 'notification';
-            notification.innerText = message;
+        socket.on('connect_error', (err) => {
+          console.error('Connection Error:', err);
+        });
 
-            notificationsDiv.appendChild(notification);
+        socket.on('error', (err) => {
+          console.error('Error:', err);
+        });
 
-            setTimeout(() => {
-                notificationsDiv.removeChild(notification);
-            }, 5000);
-        }
-    </script>
-   
+        return () => {
+          console.log("Component Unmounted, disconnecting socket");
+          socket.disconnect();
+        };
+      }, []);
+
+      return (
+        <div>
+          <h1>Chat Component</h1>
+        </div>
+      );
+    };
+
+    const App = () => (
+      <div>
+        <ChatComponent />
+      </div>
+    );
+
+    ReactDOM.render(<App />, document.getElementById('root'));
+  </script>
 </body>
 </html>
