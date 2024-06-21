@@ -31,14 +31,14 @@
     <div id="notifications"></div>
     <script>
         const socket = io('http://localhost:3000', {
-            query: { token: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5meW5kYWguY29tL2FwaS92MS9hdXRoL2xvZ2luIiwiaWF0IjoxNzE3NTc1NTAyLCJleHAiOjE3MTc1NzkxMDIsIm5iZiI6MTcxNzU3NTUwMiwianRpIjoiVnRiR0R3Q0FwUDhZN2dCRSIsInN1YiI6IjIiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.U5F2lDrbeI4yMG8-mDO7auxyVeMgOGeHtaEyO0xTGts' }
+            query: { token: 'eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5meW5kYWguY29tL2FwaS92MS9hdXRoL2xvZ2luIiwiaWF0IjoxNzE4OTg0NzYzLCJleHAiOjE3MTg5ODgzNjMsIm5iZiI6MTcxODk4NDc2MywianRpIjoiOU9JamNSVHA2Nm85Y0M3YSIsInN1YiI6IjQiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.YeD4VcOwmojJZ-MQQzCA8qKk_qUnykhEgwcQwG1lnUg' }
         });
 
         socket.on('connect', () => {
             console.log('Connected to the server with socket ID:', socket.id);
 
             // Join a room (you would get the room ID from your application logic)
-            socket.emit('joinRoom', { roomId: '666012429ecf13b16d3e39a5', userId: '9' });
+            socket.emit('joinRoom', { conversationId: '66755901161d9da4c145a081', userId: '0dU2Pkg6xZH5PoeyKcwn' });
 
             // Listen for notifications
             socket.on('notification', (data) => {

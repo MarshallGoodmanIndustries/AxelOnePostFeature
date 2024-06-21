@@ -4,7 +4,7 @@ const dotenv = require('dotenv');
 dotenv.config();
 
 const socketAuthenticate = async (socket, next) => {
-    const token = socket.handshake.query.token;
+    const token = socket.handshake.query.token
       console.log('Received token:', token)
     if (!token) {
         return next(new Error('Authentication error: No token provided'));
@@ -21,8 +21,8 @@ const socketAuthenticate = async (socket, next) => {
             email: response.data.data.user.email,
             username: response.data.data.user.username,
             id: response.data.data.user.id,
-            msg_id: userProfile.msg_id,
-            org_msg_id: userProfile.org_msg_id
+            msg_id: response.data.data.msg_id,
+            org_msg_id: response.data.data.org_msg_id
         };
         next();
     } catch (error) {
