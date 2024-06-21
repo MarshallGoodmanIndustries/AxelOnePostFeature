@@ -79,7 +79,7 @@ router.get('/:conversationId', authenticate, excludeSoftDeleted, async (req, res
 });
 
 // Route to get messages of a conversation for an organization excluding soft deleted ones
-router.get('orgmessages/:conversationId', authenticate, excludeSoftDeletedForOrg, async (req, res) => {
+router.get('/orgmessages/:conversationId', authenticate, excludeSoftDeletedForOrg, async (req, res) => {
     try {
         const { conversationId } = req.params;
         const { orgId } = req;
