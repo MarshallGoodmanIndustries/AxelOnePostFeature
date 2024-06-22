@@ -27,7 +27,7 @@ const authenticate = async (req, res, next) => {
         if (!userProfile) {
             const response = await fetchWithRetry('https://api.fyndah.com/api/v1/users/profile', {
                 headers: { Authorization: `Bearer ${token}` },
-                timeout: 10000
+                // timeout: 10000
             });
             userProfile = response.data.user;
             profileCache.set(token, userProfile);

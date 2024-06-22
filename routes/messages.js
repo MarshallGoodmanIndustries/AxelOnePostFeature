@@ -501,8 +501,9 @@ router.get('/org/messages/unread', authenticate, async (req, res) => {
 
 
 
-// Route to toggle archive status
-router.post('/messages/:messageId/toggle-archive', authenticate, async (req, res) => {
+// Route to toggle archive status (user)
+
+router.post('/user/messages/:messageId/toggle-archive', authenticate, async (req, res) => {
     try {
         const { messageId } = req.params;
         const userId = req.user.msg_id; // User ID (can be either user or organization)
@@ -556,7 +557,170 @@ router.get('/messages/archived', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
+router.post('/org/:messageId/toggle-archive', authenticate, async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user.org_msg_id; // User ID (can be either user or organization)
+        
+        // Find the message by ID
+        const message = await Message.findById(messageId);
 
+        if (!message) {
+            return res.status(404).json({ error: 'Message not found' });
+        }
+
+        // Determine if the user is the sender or recipient and toggle the respective field
+        if (message.senderId.toString() === userId || message.recipient.toString() === userId) {
+            if (message.senderId.toString() === userId) {
+                // Toggle archive status for the sender
+                message.isArchivedBySender = !message.isArchivedBySender;
+            }
+            if (message.recipient.toString() === userId) {
+                // Toggle archive status for the recipient
+                message.isArchivedByRecipient = !message.isArchivedByRecipient;
+            }
+            // Save the updated message
+            await message.save();
+            res.status(200).json(message);
+        } else {
+            return res.status(403).json({ error: 'You are not authorized to update this message' });
+        }
+    } catch (error) {
+        console.error('Error toggling message archive status:', error);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+});
+
+
+// Retrieve archived messages (org)
+router.get('/org/messages/archived', authenticate, async (req, res) => {
+    const userId = req.user.org_msg_id; // User ID (can be either user or organization)
+
+    try {
+        // Find archived messages where the user is either the sender or recipient
+        const archivedMessages = await Message.find({
+            $or: [
+                { recipient: userId, isArchivedByRecipient: true },
+                { senderId: userId, isArchivedBySender: true }
+            ]
+        }).sort({ timestamp: -1 });
+
+        res.status(200).json(archivedMessages);
+    } catch (err) {
+        console.error('Error retrieving archived messages:', err);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+});
+
+router.post('/user/messages/:messageId/toggle-star', authenticate, async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user.org_msg_id; // User ID (can be either user or organization)
+        
+        // Find the message by ID
+        const message = await Message.findById(messageId);
+
+        if (!message) {
+            return res.status(404).json({ error: 'Message not found' });
+        }
+
+        // Determine if the user is the sender or recipient and toggle the respective field
+        if (message.senderId.toString() === userId || message.recipient.toString() === userId) {
+            if (message.senderId.toString() === userId) {
+                // Toggle star status for the sender
+                message.isStaredBySender = !message.isStaredBySender;
+            }
+            if (message.recipient.toString() === userId) {
+                // Toggle archive status for the recipient
+                message.isStaredByRecipient = !message.isStaredByRecipient;
+            }
+            // Save the updated message
+            await message.save();
+            res.status(200).json(message);
+        } else {
+            return res.status(403).json({ error: 'You are not authorized to update this message' });
+        }
+    } catch (error) {
+        console.error('Error toggling message star status:', error);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+});
+
+
+// Retrieve star messages (user)
+router.get('/user/messages/archived', authenticate, async (req, res) => {
+    const userId = req.user.org_msg_id; // User ID (can be either user or organization)
+
+    try {
+        // Find stared messages where the user is either the sender or recipient
+        const staredMessages = await Message.find({
+            $or: [
+                { recipient: userId, isStaredByRecipient: true },
+                { senderId: userId, isStaredBySender: true }
+            ]
+        }).sort({ timestamp: -1 });
+
+        res.status(200).json( staredMessages);
+    } catch (err) {
+        console.error('Error retrieving  stared messages:', err);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+});
+
+//toggle star status for org
+router.post('/org/messages/:messageId/toggle-star', authenticate, async (req, res) => {
+    try {
+        const { messageId } = req.params;
+        const userId = req.user.org_msg_id; // User ID (can be either user or organization)
+        
+        // Find the message by ID
+        const message = await Message.findById(messageId);
+
+        if (!message) {
+            return res.status(404).json({ error: 'Message not found' });
+        }
+
+        // Determine if the user is the sender or recipient and toggle the respective field
+        if (message.senderId.toString() === userId || message.recipient.toString() === userId) {
+            if (message.senderId.toString() === userId) {
+                // Toggle star status for the sender
+                message.isStaredBySender = !message.isStaredBySender;
+            }
+            if (message.recipient.toString() === userId) {
+                // Toggle star status for the recipient
+                message.isStaredByRecipient = !message.isStaredByRecipient;
+            }
+            // Save the updated message
+            await message.save();
+            res.status(200).json(message);
+        } else {
+            return res.status(403).json({ error: 'You are not authorized to update this message' });
+        }
+    } catch (error) {
+        console.error('Error toggling message star status:', error);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+});
+
+// Retrieve stared messages messages (org)
+router.get('/org/messages/archived', authenticate, async (req, res) => {
+    const userId = req.user.org_msg_id; // User ID (can be either user or organization)
+
+    try {
+        // Find stared messages where the user is either the sender or recipient
+        const staredMessages = await Message.find({
+            $or: [
+                { recipient: userId, isStaredByRecipient: true },
+                { senderId: userId, isStaredBySender: true }
+            ]
+        }).sort({ timestamp: -1 });
+
+        res.status(200).json(staredMessages);
+    } catch (err) {
+        console.error('Error retrieving stared messages:', err);
+        res.status(500).json({ error: 'Something went wrong' });
+    }
+});
 
 
 router.delete('/delete/:messageId', authenticate, async (req, res) => {

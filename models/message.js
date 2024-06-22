@@ -37,6 +37,16 @@ const messageSchema = new mongoose.Schema({
     default: false,
     index: true
   },
+  isStaredBySender: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
+  isStaredByRecipient: {
+    type: Boolean,
+    default: false,
+    index: true
+  },
   isReadByRecipient: {
     type: Boolean,
     default: false
@@ -72,6 +82,8 @@ messageSchema.index({ sender: 1, recipient: 1 });
 messageSchema.index({ recipient: 1, isReadByRecipient: 1 });
 messageSchema.index({ recipient: 1, isArchivedByRecipient: 1 });
 messageSchema.index({ sender: 1, isArchivedBySender: 1 });
+messageSchema.index({ recipient: 1, isStaredByRecipient: 1 });
+messageSchema.index({ sender: 1, isStaredBySender: 1 });
 messageSchema.index({ recipient: 1, tagsByRecipient: 1 });
 messageSchema.index({ recipient: 1, categoryByRecipient: 1 });
 messageSchema.index({ conversationId: 1, timestamp: -1 });

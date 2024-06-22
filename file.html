@@ -17,22 +17,16 @@
 
     const ChatComponent = () => {
       useEffect(() => {
-        console.log("Component Mounted");
-        
-        const token = "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJpc3MiOiJodHRwczovL2FwaS5meW5kYWguY29tL2FwaS92MS9hdXRoL2xvZ2luIiwiaWF0IjoxNzE5MDA0MDE1LCJleHAiOjE3MTkwMDc2MTUsIm5iZiI6MTcxOTAwNDAxNSwianRpIjoianVUWnBVQ1dXOWtHS2o0NSIsInN1YiI6IjQiLCJwcnYiOiIyM2JkNWM4OTQ5ZjYwMGFkYjM5ZTcwMWM0MDA4NzJkYjdhNTk3NmY3In0.bOJePeMPelW3ZIAo9aJgqHlucem_S57HnEW_MTuTBj4";
+        console.log("here");
+        const token = localStorage.getItem('token');
 
-        console.log("Creating socket with token:", token);
-        const socket = io('http://localhost:3000', {
-            query: { token },
-            transports: ['websocket'], // Ensure we are using websockets
-            reconnectionAttempts: 3, // Retry connecting 3 times
+        const socket = io('https://axelonepostfeature.onrender.com', {
+          query: { token: "hshhsdhsdjhjsdhjs" }
         });
-
-        console.log("Socket created:", socket);
 
         socket.on('connect', () => {
           console.log('Connected to the server');
-          socket.emit('joinRoom', { conversationId: '66755f77b28adad4d20f939b' });
+          socket.emit('join', { roomId: 'some_room_id' });
         });
 
         socket.on('new_message', (data) => {
@@ -44,15 +38,14 @@
         });
 
         socket.on('connect_error', (err) => {
-          console.error('Connection Error:', err);
+          console.log('Connection Error:', err);
         });
 
         socket.on('error', (err) => {
-          console.error('Error:', err);
+          console.log('Error:', err);
         });
 
         return () => {
-          console.log("Component Unmounted, disconnecting socket");
           socket.disconnect();
         };
       }, []);
@@ -74,5 +67,3 @@
   </script>
 </body>
 </html>
-
-
