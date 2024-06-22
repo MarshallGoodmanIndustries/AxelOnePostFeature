@@ -1,6 +1,5 @@
 const axios = require('axios');
 const jwt = require('jsonwebtoken');
-const profileCache = new Map();
 
 // Helper function to fetch data with retry logic
 const fetchWithRetry = async (url, options, retries = 3) => {
@@ -23,15 +22,11 @@ const authenticate = async (req, res, next) => {
 
     const token = authHeader.split(' ')[1];
     try {
-        let userProfile = profileCache.get(token);
-        if (!userProfile) {
-            const response = await fetchWithRetry('https://api.fyndah.com/api/v1/users/profile', {
-                headers: { Authorization: `Bearer ${token}` },
-                // timeout: 10000
-            });
-            userProfile = response.data.user;
-            profileCache.set(token, userProfile);
-        }
+        const response = await fetchWithRetry('https://api.fyndah.com/api/v1/users/profile', {
+            headers: { Authorization: `Bearer ${token}` },
+            timeout: 10000
+        });
+        const userProfile = response.data.user;
 
         const decoded = jwt.verify(token, process.env.JWT_SEC);
 
