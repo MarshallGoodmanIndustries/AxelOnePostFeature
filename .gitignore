@@ -1,2 +1,9 @@
 .env
 node_modules
+migration
+testScript
+seedPostScript
+seed.json
+file.html
+index.html
+image2.jpg

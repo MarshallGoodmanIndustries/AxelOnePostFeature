@@ -6,6 +6,7 @@ const { storage } = require('../middleware/multerConfig'); // Adjust the path as
 const upload = multer({ storage });
 const Post = require('../models/post');
 const Listings = require('../models/listing'); // Adjust the path as necessary
+const axios = require('axios');
 const Comment = require('../models/comments');
 //fetch one post
 const WebSocket = require('ws');
@@ -50,8 +51,6 @@ const wss = new WebSocket.Server({ port: 8080});
 //     }
 // });
 
-const axios = require('axios');
-
 router.post('/post', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
     try {
         const { title, description } = req.body;
@@ -81,6 +80,7 @@ router.post('/post', authenticate, checkOrganization, upload.single('image'), as
         }
 
         const orgmsg_id = organization.msg_id;
+        const orgName = organization.org_name;
 
         // Optional image handling
         let imageUrl = '';
@@ -96,7 +96,7 @@ router.post('/post', authenticate, checkOrganization, upload.single('image'), as
             authorEmail: req.user.email,
             organization: organizationId,
             orgmsg_id: orgmsg_id,
-            authorUsername: req.user.username,
+            authorUsername: orgName,
             image: imageUrl // Add image URL to the post document
         });
 
