@@ -148,7 +148,7 @@ router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForO
             return acc;
         }, {});
 
-        // Map conversations to include member names, logos, profile photo paths dynamically
+        // Map conversations to include member names, logos, profile photo paths and unread messages count dynamically
         const results = await Promise.all(conversations.map(async (convo) => {
             // Find last message for the conversation
             const lastMessage = await Message.findOne({ conversationId: convo._id })
@@ -240,6 +240,20 @@ router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, 
             return res.status(404).json({ error: 'No conversations found for this user' });
         }
 
+         // Find unread messages for the recipient
+         const unreadMessages = await Message.find({ recipient: userId, isReadByRecipient: false });
+
+         // Group unread messages by conversation ID and count them
+         const unreadMessagesByConversation = unreadMessages.reduce((acc, message) => {
+             const { conversationId } = message;
+             if (!acc[conversationId]) {
+                 acc[conversationId] = 0;
+             }
+             acc[conversationId]++;
+             return acc;
+         }, {});
+
+
         // Map conversations to include member names, logos, and profile photo paths dynamically
         const results = await Promise.all(conversations.map(async (convo) => {
             // Find last message for the conversation
@@ -260,6 +274,7 @@ router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, 
                 }),
                 updatedAt: convo.updatedAt,
                 lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
+                unreadCount: unreadMessagesByConversation[convo._id] || 0,
                 __v: convo.__v
             };
         }));
