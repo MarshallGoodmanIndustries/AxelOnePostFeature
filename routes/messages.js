@@ -49,28 +49,13 @@ router.get('/:conversationId', authenticate, excludeSoftDeleted, async (req, res
             ] 
         }).sort({ createdAt: 1 });
 
-        // Generate the welcome message
-        const welcomeMessage = {
-            _id: 'welcome-message',
-            conversationId: conversationId,
-            sender: 'System',
-            recipient: null, // or any default value, if you don't use recipient for system messages
-            senderId: 'system',
-            message: 'Welcome! Start typing below to send a message. Fyndah wishes you the best experience!',
-            createdAt: new Date(),
-            isReadByRecipient: true // Mark the welcome message as read
-        };
-
-        // Insert the welcome message at the beginning of the messages array
-        const allMessages = [welcomeMessage, ...messages];
-
         if (messages.length === 0) {
             console.log('No messages found for conversationId:', conversationId);
         } else {
             console.log('Messages found:', messages);
         }
 
-        res.json(allMessages);
+        res.json(messages);
     } catch (err) {
         console.error('Error fetching messages:', err);
         res.status(500).json({ error: 'Something went wrong' });
@@ -93,20 +78,6 @@ router.get('/orgmessages/:conversationId', authenticate, excludeSoftDeletedForOr
             ]
         }).sort({ createdAt: 1 });
 
-        // Generate the welcome message
-        const welcomeMessage = {
-            _id: 'welcome-message',
-            conversationId: conversationId,
-            sender: 'System',
-            recipient: null, // or any default value, if you don't use recipient for system messages
-            senderId: 'system',
-            message: 'Welcome! Start typing below to send a message. Fyndah wishes you the best experience!',
-            createdAt: new Date(),
-            isReadByRecipient: true // Mark the welcome message as read
-        };
-
-        // Insert the welcome message at the beginning of the messages array
-        const allMessages = [welcomeMessage, ...messages];
 
         if (messages.length === 0) {
             console.log('No messages found for conversationId:', conversationId);
@@ -114,7 +85,7 @@ router.get('/orgmessages/:conversationId', authenticate, excludeSoftDeletedForOr
             console.log('Messages found:', messages);
         }
 
-        res.json(allMessages);
+        res.json(messages);
     } catch (err) {
         console.error('Error fetching messages:', err);
         res.status(500).json({ error: 'Something went wrong' });
