@@ -277,7 +277,7 @@ router.patch('/comment/edit/:commentId', authenticate, async (req, res) => {
         }
 
         // Check if the current user is the author of the comment
-        if (comment.author !== req.user.id) {
+        if (comment.author !== req.user.username) {
             return res.status(403).json({ status: 'error', message: 'You are not authorized to edit this comment' });
         }
 
@@ -349,7 +349,7 @@ router.delete("/comment/delete/:commentId", authenticate, async(req, res) => {
         }
 
         // Check if the current user is the author of the comment
-        if (comment.author !== req.user.id) {
+        if (comment.author !== req.user.username) {
             return res.status(403).json({ status: 'error', message: 'You are not authorized to delete this comment' });
         }
 
