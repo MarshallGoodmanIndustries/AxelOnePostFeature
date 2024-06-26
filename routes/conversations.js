@@ -376,7 +376,7 @@ router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, 
          }, {});
 
 
-    // Map conversations to include member names, logos, and profile photo paths dynamically
+ // Map conversations to include member names, logos, and profile photo paths dynamically
 const results = await Promise.all(conversations.map(async (convo) => {
     // Ensure the logged-in user's ID
     const loggedInUserId = userId;
@@ -391,20 +391,16 @@ const results = await Promise.all(conversations.map(async (convo) => {
         [convo.members[1], convo.members[otherMemberIndex]] = [convo.members[otherMemberIndex], convo.members[1]];
     }
 
-    // Modify the member information to display "Fyndah" instead of "Unknown"
-    convo.members = convo.members.map(member => {
-        const memberInfo = getNameById(member, userMap, organizationMap);
-        // Replace "Unknown" with "Fyndah" for admin_msg_id
-        if (member === 'admin_msg_id') {
-            memberInfo.name = 'Fyndah';
-        }
+    // Fetch detailed member information
+    const detailedMembers = await Promise.all(convo.members.map(async member => {
+        const memberInfo = await getNameById(member, userMap, organizationMap);
         return {
             id: member,
-            name: memberInfo.name,
+            name: member === 'admin_msg_id' ? 'Fyndah' : memberInfo.name, // Replace 'admin_msg_id' with 'Fyndah'
             profilePhotoPath: memberInfo.profilePhotoPath,
             logo: memberInfo.logo
         };
-    });
+    }));
 
     // Find last message for the conversation
     const lastMessage = await Message.findOne({ conversationId: convo._id })
@@ -413,7 +409,7 @@ const results = await Promise.all(conversations.map(async (convo) => {
 
     return {
         _id: convo._id,
-        members: convo.members,
+        members: detailedMembers,
         updatedAt: convo.updatedAt,
         lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
         unreadCount: unreadMessagesByConversation[convo._id] || 0,
