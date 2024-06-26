@@ -376,7 +376,7 @@ router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, 
          }, {});
 
 
-      // Map conversations to include member names, logos, and profile photo paths dynamically
+    // Map conversations to include member names, logos, and profile photo paths dynamically
 const results = await Promise.all(conversations.map(async (convo) => {
     // Ensure the logged-in user's ID
     const loggedInUserId = userId;
@@ -391,6 +391,21 @@ const results = await Promise.all(conversations.map(async (convo) => {
         [convo.members[1], convo.members[otherMemberIndex]] = [convo.members[otherMemberIndex], convo.members[1]];
     }
 
+    // Modify the member information to display "Fyndah" instead of "Unknown"
+    convo.members = convo.members.map(member => {
+        const memberInfo = getNameById(member, userMap, organizationMap);
+        // Replace "Unknown" with "Fyndah" for admin_msg_id
+        if (member === 'admin_msg_id') {
+            memberInfo.name = 'Fyndah';
+        }
+        return {
+            id: member,
+            name: memberInfo.name,
+            profilePhotoPath: memberInfo.profilePhotoPath,
+            logo: memberInfo.logo
+        };
+    });
+
     // Find last message for the conversation
     const lastMessage = await Message.findOne({ conversationId: convo._id })
         .sort({ createdAt: -1 })
@@ -398,15 +413,7 @@ const results = await Promise.all(conversations.map(async (convo) => {
 
     return {
         _id: convo._id,
-        members: convo.members.map(member => {
-            const memberInfo = getNameById(member, userMap, organizationMap);
-            return {
-                id: member,
-                name: memberInfo.name,
-                profilePhotoPath: memberInfo.profilePhotoPath,
-                logo: memberInfo.logo
-            };
-        }),
+        members: convo.members,
         updatedAt: convo.updatedAt,
         lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
         unreadCount: unreadMessagesByConversation[convo._id] || 0,
@@ -416,6 +423,7 @@ const results = await Promise.all(conversations.map(async (convo) => {
 
 // Return the results
 res.status(200).json(results);
+
  } catch (err) {
         console.error('Error fetching conversations:', err.message);
         res.status(500).json({ error: 'Something went wrong' });
