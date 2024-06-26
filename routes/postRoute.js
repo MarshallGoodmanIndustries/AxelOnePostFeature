@@ -181,7 +181,7 @@ router.delete('/post/:postId', authenticate, checkOrganization,  async (req, res
         }
 
         // Check if the current user is the author of the post
-        if (post.author !== req.user.id) {
+        if (post.author.toString() !== req.user.id.toString()) {
             return res.status(403).json({ status: 'error', message: 'You are not authorized to delete this post' });
         }
 
