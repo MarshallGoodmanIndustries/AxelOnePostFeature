@@ -284,43 +284,43 @@ router.post('/send-message/user/:conversationId', authenticate, async (req, res)
 });
 
 //Welcome Message from fyndah ;-)
-// router.post('/webhook/user-registered', async (req, res) => {
-//     const { msg_id, username } = req.body;
+router.post('/webhook/user-registered', async (req, res) => {
+    const { msg_id, username } = req.body;
 
-//     try {
-//         //create a new conversation 
-//         const conversation = new Conversation({
-//             members: ['admin_msg_id', msg_id],
-//             updatedAt: new Date()
-//         });
+    try {
+        //create a new conversation 
+        const conversation = new Conversation({
+            members: ['admin_msg_id', msg_id],
+            updatedAt: new Date()
+        });
 
-//         const savedConversation = await conversation.save()
+        const savedConversation = await conversation.save()
 
-//         //create a welcome message
-//         const welcomeMessage = new Message({
-//             sender: 'Fyndah',
-//             conversationId: savedConversation._id,
-//             recipient: msg_id,
-//             senderId: 'admin_msg_id',
-//             message: `Welcome to fyndah ${username}. Enjoy the best experience!`,
-//             createdAt: new Date()
-//         });
+        //create a welcome message
+        const welcomeMessage = new Message({
+            sender: 'Fyndah',
+            conversationId: savedConversation._id,
+            recipient: msg_id,
+            senderId: 'admin_msg_id',
+            message: `Welcome to fyndah ${username}. Enjoy the best experience!`,
+            createdAt: new Date()
+        });
 
-//         const savedMessage = await welcomeMessage.save();
+        const savedMessage = await welcomeMessage.save();
 
-//         // Emiting welcome message with socket.io 
-//         // io.to(msg_id).emit('receiveMessage', {
-//         //     sender: 'Fyndah',
-//         //     message: `Welcome to fyndah ${username}. Enjoy the best experience!`,
-//         // });
+        // Emiting welcome message with socket.io 
+        // io.to(msg_id).emit('receiveMessage', {
+        //     sender: 'Fyndah',
+        //     message: `Welcome to fyndah ${username}. Enjoy the best experience!`,
+        // });
 
-//         console.log('Welcome message sent successfully:', savedMessage);
-//         res.status(200).json({ success: true, savedMessage});
-//     } catch (error) {
-//         console.error('Error handling user registration webhook:', error.message);
-//         res.status(500).json({ error: 'Failed to process webhook' });
-//     }
-// });
+        console.log('Welcome message sent successfully:', savedMessage);
+        res.status(200).json({ success: true, savedMessage});
+    } catch (error) {
+        console.error('Error handling user registration webhook:', error.message);
+        res.status(500).json({ error: 'Failed to process webhook' });
+    }
+});
 
 router.post('/user/messages/read', authenticate, async (req, res) => {
     try {

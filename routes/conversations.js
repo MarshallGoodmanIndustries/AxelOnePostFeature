@@ -148,38 +148,160 @@ router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForO
             return acc;
         }, {});
 
-        // Map conversations to include member names, logos, profile photo paths and unread messages count dynamically
-        const results = await Promise.all(conversations.map(async (convo) => {
-            // Find last message for the conversation
-            const lastMessage = await Message.findOne({ conversationId: convo._id })
-                .sort({ createdAt: -1 })
-                .select('message createdAt');
+ // Map conversations to include member names, logos, profile photo paths and unread messages count dynamically
+const results = await Promise.all(conversations.map(async (convo) => {
+    // Ensure the organization's ID
+    const organizationId = orgId;
 
+    // Find the index of the organization in the members array
+    const organizationIndex = convo.members.findIndex(member => member === organizationId);
+
+    // Ensure the other member's ID is at index 1
+    if (organizationIndex !== -1 && convo.members.length > 1) {
+        // Swap the members so that the other member is at index 1
+        const otherMemberIndex = organizationIndex === 0 ? 1 : 0;
+        [convo.members[1], convo.members[otherMemberIndex]] = [convo.members[otherMemberIndex], convo.members[1]];
+    }
+
+    // Find last message for the conversation
+    const lastMessage = await Message.findOne({ conversationId: convo._id })
+        .sort({ createdAt: -1 })
+        .select('message createdAt');
+
+    return {
+        _id: convo._id,
+        members: convo.members.map(member => {
+            const memberInfo = getNameById(member, userMap, organizationMap);
             return {
-                _id: convo._id,
-                members: convo.members.map(member => {
-                    const memberInfo = getNameById(member, userMap, organizationMap);
-                    return {
-                        id: member,
-                        name: memberInfo.name,
-                        profilePhotoPath: memberInfo.profilePhotoPath,
-                        logo: memberInfo.logo
-                    };
-                }),
-                updatedAt: convo.updatedAt,
-                lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
-                unreadCount: unreadMessagesByConversation[convo._id] || 0,
-                __v: convo.__v
+                id: member,
+                name: memberInfo.name,
+                profilePhotoPath: memberInfo.profilePhotoPath,
+                logo: memberInfo.logo
             };
-        }));
+        }),
+        updatedAt: convo.updatedAt,
+        lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
+        unreadCount: unreadMessagesByConversation[convo._id] || 0,
+        __v: convo.__v
+    };
+}));
 
-        // Return the results with total unread conversations count
-        res.status(200).json(results);
+// Return the results
+res.status(200).json(results);
+
     } catch (err) {
         console.error('Error fetching conversations:', err.message);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
+
+
+// router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, async (req, res) => {
+//     const user_msg_Id = req.params.user_msg_Id;
+//     const userId = req.userId;
+//     try {
+//         const options = {
+//             headers: { Authorization: `Bearer ${req.token}` },
+//             timeout: 10000
+//         };
+
+//         let allUsers = [];
+//         let allOrganizations = [];
+
+//         // Fetch all users and organizations from the external API using axios
+//         try {
+//             const allUsersResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/users/all', options);
+//             allUsers = allUsersResponse.data;
+//             console.log('Fetched users:', allUsers);
+//         } catch (error) {
+//             console.error('Error fetching users:', error.message);
+//             return res.status(500).json({ error: 'Failed to fetch users' });
+//         }
+
+//         try {
+//             const allOrganizationsResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/organization', options);
+//             allOrganizations = allOrganizationsResponse.data;
+//             console.log('Fetched organizations:', allOrganizations);
+//         } catch (error) {
+//             console.error('Error fetching organizations:', error.message);
+//             return res.status(500).json({ error: 'Failed to fetch organizations' });
+//         }
+
+//         // Create maps for quick lookup
+//         const userMap = allUsers.reduce((map, user) => {
+//             map[user.msg_id] = user;
+//             return map;
+//         }, {});
+
+//         const organizationMap = allOrganizations.reduce((map, org) => {
+//             map[org.msg_id] = org;
+//             return map;
+//         }, {});
+
+//         console.log('User Map:', userMap);
+//         console.log('Organization Map:', organizationMap);
+
+//         // Fetch conversations for the authenticated user
+//         const conversations = await Conversation.find({ 
+//             members: user_msg_Id, 
+//             $or: [
+//                 { deletedForSender: { $ne: userId } },
+//                 { deletedForRecipient: { $ne: userId } }
+//             ]
+//         }).sort({ updatedAt: -1 });
+
+//         if (!conversations || conversations.length === 0) {
+//             return res.status(404).json({ error: 'No conversations found for this user' });
+//         }
+
+//          // Find unread messages for the recipient
+//          const unreadMessages = await Message.find({ recipient: userId, isReadByRecipient: false });
+
+//          // Group unread messages by conversation ID and count them
+//          const unreadMessagesByConversation = unreadMessages.reduce((acc, message) => {
+//              const { conversationId } = message;
+//              if (!acc[conversationId]) {
+//                  acc[conversationId] = 0;
+//              }
+//              acc[conversationId]++;
+//              return acc;
+//          }, {});
+
+
+//         // Map conversations to include member names, logos, and profile photo paths dynamically
+//         const results = await Promise.all(conversations.map(async (convo) => {
+//             // Find last message for the conversation
+//             const lastMessage = await Message.findOne({ conversationId: convo._id })
+//                 .sort({ createdAt: -1 })
+//                 .select('message createdAt');
+
+//             return {
+//                 _id: convo._id,
+//                 members: convo.members.map(member => {
+//                     const memberInfo = getNameById(member, userMap, organizationMap);
+//                     return {
+//                         id: member,
+//                         name: memberInfo.name,
+//                         profilePhotoPath: memberInfo.profilePhotoPath,
+//                         logo: memberInfo.logo
+//                     };
+//                 }),
+//                 updatedAt: convo.updatedAt,
+//                 lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
+//                 unreadCount: unreadMessagesByConversation[convo._id] || 0,
+//                 __v: convo.__v
+//             };
+//         }));
+
+//         // Return the results
+//         res.status(200).json(results);
+//     } catch (err) {
+//         console.error('Error fetching conversations:', err.message);
+//         res.status(500).json({ error: 'Something went wrong' });
+//     }
+// });
+
+// Helper function to fetch data with retry logic using axios
 
 
 router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, async (req, res) => {
@@ -254,40 +376,53 @@ router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, 
          }, {});
 
 
-        // Map conversations to include member names, logos, and profile photo paths dynamically
-        const results = await Promise.all(conversations.map(async (convo) => {
-            // Find last message for the conversation
-            const lastMessage = await Message.findOne({ conversationId: convo._id })
-                .sort({ createdAt: -1 })
-                .select('message createdAt');
+      // Map conversations to include member names, logos, and profile photo paths dynamically
+const results = await Promise.all(conversations.map(async (convo) => {
+    // Ensure the logged-in user's ID
+    const loggedInUserId = userId;
 
+    // Find the index of the logged-in user in the members array
+    const loggedInUserIndex = convo.members.findIndex(member => member === loggedInUserId);
+
+    // Ensure the other member's ID is at index 1
+    if (loggedInUserIndex !== -1 && convo.members.length > 1) {
+        // Swap the members so that the other member is at index 1
+        const otherMemberIndex = loggedInUserIndex === 0 ? 1 : 0;
+        [convo.members[1], convo.members[otherMemberIndex]] = [convo.members[otherMemberIndex], convo.members[1]];
+    }
+
+    // Find last message for the conversation
+    const lastMessage = await Message.findOne({ conversationId: convo._id })
+        .sort({ createdAt: -1 })
+        .select('message createdAt');
+
+    return {
+        _id: convo._id,
+        members: convo.members.map(member => {
+            const memberInfo = getNameById(member, userMap, organizationMap);
             return {
-                _id: convo._id,
-                members: convo.members.map(member => {
-                    const memberInfo = getNameById(member, userMap, organizationMap);
-                    return {
-                        id: member,
-                        name: memberInfo.name,
-                        profilePhotoPath: memberInfo.profilePhotoPath,
-                        logo: memberInfo.logo
-                    };
-                }),
-                updatedAt: convo.updatedAt,
-                lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
-                unreadCount: unreadMessagesByConversation[convo._id] || 0,
-                __v: convo.__v
+                id: member,
+                name: memberInfo.name,
+                profilePhotoPath: memberInfo.profilePhotoPath,
+                logo: memberInfo.logo
             };
-        }));
+        }),
+        updatedAt: convo.updatedAt,
+        lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
+        unreadCount: unreadMessagesByConversation[convo._id] || 0,
+        __v: convo.__v
+    };
+}));
 
-        // Return the results
-        res.status(200).json(results);
-    } catch (err) {
+// Return the results
+res.status(200).json(results);
+ } catch (err) {
         console.error('Error fetching conversations:', err.message);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
 
-// Helper function to fetch data with retry logic using axios
+
 const fetchWithRetry = async (url, options, retries = 3) => {
     for (let i = 0; i < retries; i++) {
         try {
