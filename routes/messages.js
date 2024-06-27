@@ -2,7 +2,7 @@ const express = require('express');
 const router = express.Router();
 const Message = require('../models/message');
 const Conversation = require('../models/conversations');
-const authenticate = require('../middleware/authenticator')
+const authenticate = require('../middleware/authenticator');
 
 // Middleware to exclude soft deleted conversations and messages
 async function excludeSoftDeleted(req, res, next) {
@@ -302,7 +302,11 @@ router.post('/webhook/user-registered', async (req, res) => {
             conversationId: savedConversation._id,
             recipient: msg_id,
             senderId: 'admin_msg_id',
-            message: `Welcome to fyndah ${username}. Enjoy the best experience!`,
+            message: `${username} 
+            Welcome to Fyndah ${username}. 
+            🎉 We're thrilled to have you on board. Start exploring local businesses and services right away. Don’t forget to complete your profile to get the best recommendations and make the most of your Fyndah experience.
+            Need help? Check out our support resources or reach out to us anytime. Happy discovering!
+             The Fyndah Team `,
             createdAt: new Date()
         });
 
@@ -322,12 +326,48 @@ router.post('/webhook/user-registered', async (req, res) => {
     }
 });
 
+// router.post('/user/messages/read', authenticate, async (req, res) => {
+//     try {
+//         const { messageIds, isRead } = req.body;
+
+//         if (!Array.isArray(messageIds) || messageIds.length === 0) {
+//             return res.status(400).json({ error: 'messageIds must be a non-empty array' });
+//         }
+
+//         if (typeof isRead !== 'boolean') {
+//             return res.status(400).json({ error: 'isRead must be a boolean' });
+//         }
+
+//         const userId = req.user.msg_id; // The authenticated user's ID
+
+//         console.log(`User ID: ${userId}`);
+
+//         // Find messages by IDs
+//         const messages = await Message.find({ _id: { $in: messageIds }, recipient: userId });
+
+//         if (!messages || messages.length === 0) {
+//             return res.status(404).json({ error: 'Messages not found' });
+//         }
+
+//         // Update the read status for valid messages
+//         await Message.updateMany(
+//             { _id: { $in: messages.map(msg => msg._id) } },
+//             { $set: { isReadByRecipient: isRead } }
+//         );
+
+//         res.status(200).json({ message: 'Messages updated successfully' });
+//     } catch (error) {
+//         console.error('Error updating message read status:', error);
+//         res.status(500).json({ error: 'Something went wrong' });
+//     }
+// });
+
 router.post('/user/messages/read', authenticate, async (req, res) => {
     try {
-        const { messageIds, isRead } = req.body;
+        const { conversationId, isRead } = req.body;
 
-        if (!Array.isArray(messageIds) || messageIds.length === 0) {
-            return res.status(400).json({ error: 'messageIds must be a non-empty array' });
+        if (!conversationId) {
+            return res.status(400).json({ error: 'conversationId is required' });
         }
 
         if (typeof isRead !== 'boolean') {
@@ -338,8 +378,8 @@ router.post('/user/messages/read', authenticate, async (req, res) => {
 
         console.log(`User ID: ${userId}`);
 
-        // Find messages by IDs
-        const messages = await Message.find({ _id: { $in: messageIds }, recipient: userId });
+        // Find messages by conversation ID and recipient ID
+        const messages = await Message.find({ conversationId, recipient: userId });
 
         if (!messages || messages.length === 0) {
             return res.status(404).json({ error: 'Messages not found' });
@@ -350,6 +390,13 @@ router.post('/user/messages/read', authenticate, async (req, res) => {
             { _id: { $in: messages.map(msg => msg._id) } },
             { $set: { isReadByRecipient: isRead } }
         );
+
+        // Emit the read status change to all relevant clients
+        const io = req.io;
+        io.to(conversationId).emit('messageRead', {
+            conversationId,
+            isRead
+        });
 
         res.status(200).json({ message: 'Messages updated successfully' });
     } catch (error) {
@@ -360,10 +407,10 @@ router.post('/user/messages/read', authenticate, async (req, res) => {
 
 router.post('/organization/messages/read', authenticate, async (req, res) => {
     try {
-        const { messageIds, isRead } = req.body;
+        const { conversationId, isRead } = req.body;
 
-        if (!Array.isArray(messageIds) || messageIds.length === 0) {
-            return res.status(400).json({ error: 'messageIds must be a non-empty array' });
+        if (!conversationId) {
+            return res.status(400).json({ error: 'conversationId is required' });
         }
 
         if (typeof isRead !== 'boolean') {
@@ -371,21 +418,31 @@ router.post('/organization/messages/read', authenticate, async (req, res) => {
         }
 
         const organizationId = req.user.org_msg_id; // The authenticated user's organization ID
-
-        console.log(`Organization ID: ${organizationId}`);
-
-        // Find messages by IDs
-        const messages = await Message.find({ _id: { $in: messageIds }, recipient: organizationId });
-
-        if (!messages || messages.length === 0) {
-            return res.status(404).json({ error: 'Messages not found' });
+        if (!organizationId) {
+            return res.status(404).json({ error: 'Not a valid organization. Organization not found' });
         }
+        console.log(`Organization ID: ${organizationId}`);
+       
 
-        // Update the read status for valid messages
-        await Message.updateMany(
+       // Find messages by conversation ID and recipient ID
+       const messages = await Message.find({ conversationId, recipient: userId });
+
+       if (!messages || messages.length === 0) {
+           return res.status(404).json({ error: 'Messages not found' });
+       }
+
+         // Update the read status for valid messages
+         await Message.updateMany(
             { _id: { $in: messages.map(msg => msg._id) } },
             { $set: { isReadByRecipient: isRead } }
         );
+
+        // Emit the read status change to all relevant clients
+        const io = req.io;
+        io.to(conversationId).emit('messageRead', {
+            conversationId,
+            isRead
+        });
 
         res.status(200).json({ message: 'Messages updated successfully' });
     } catch (error) {
