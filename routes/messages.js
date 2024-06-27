@@ -287,7 +287,14 @@ router.post('/send-message/user/:conversationId', authenticate, async (req, res)
 router.post('/webhook/user-registered', async (req, res) => {
     const { msg_id, username } = req.body;
 
-    try {
+    try { 
+        // Check if welcome message already sent for this user
+        const existingMessage = await Message.findOne({ recipient: msg_id });
+
+        if (existingMessage) {
+            console.log('Welcome message already sent for user:', username);
+            return res.status(200).json({ message: 'Welcome message already sent' });
+        }
         //create a new conversation 
         const conversation = new Conversation({
             members: ['admin_msg_id', msg_id],
@@ -302,21 +309,18 @@ router.post('/webhook/user-registered', async (req, res) => {
             conversationId: savedConversation._id,
             recipient: msg_id,
             senderId: 'admin_msg_id',
-            message: `${username} 
-            Welcome to Fyndah ${username}. 
-            🎉 We're thrilled to have you on board. Start exploring local businesses and services right away. Don’t forget to complete your profile to get the best recommendations and make the most of your Fyndah experience.
-            Need help? Check out our support resources or reach out to us anytime. Happy discovering!
-             The Fyndah Team `,
+            message: `
+                ${username}
+                Welcome to Fyndah, ${username} 🎉
+                We're thrilled to have you on board. Start exploring local businesses and services right away. Don’t forget to complete your profile to get the best recommendations and make the most of your Fyndah experience.
+                Need help? Check out our support resources or reach out to us anytime. Happy discovering!
+                The Fyndah Team 
+                 `,
             createdAt: new Date()
         });
+        
 
         const savedMessage = await welcomeMessage.save();
-
-        // Emiting welcome message with socket.io 
-        // io.to(msg_id).emit('receiveMessage', {
-        //     sender: 'Fyndah',
-        //     message: `Welcome to fyndah ${username}. Enjoy the best experience!`,
-        // });
 
         console.log('Welcome message sent successfully:', savedMessage);
         res.status(200).json({ success: true, savedMessage});
@@ -605,7 +609,7 @@ router.post('/user/messages/:messageId/toggle-archive', authenticate, async (req
 
 // Retrieve archived messages
 router.get('/messages/archived', authenticate, async (req, res) => {
-    const userId = req.user.msg_id; // User ID (can be either user or organization)
+    const userId = req.user.msg_id; //user's message id
 
     try {
         // Find archived messages where the user is either the sender or recipient

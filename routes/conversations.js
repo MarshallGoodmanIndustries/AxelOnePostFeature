@@ -194,7 +194,6 @@ res.status(200).json(results);
 });
 
 // Route to get conversations for a user excluding soft deleted ones
-
 router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, async (req, res) => {
     const user_msg_Id = req.params.user_msg_Id;
     const userId = req.userId;
