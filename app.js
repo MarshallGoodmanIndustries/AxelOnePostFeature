@@ -18,7 +18,7 @@ const app = express();
 const server = http.createServer(app);
 const io = socketIo(server, {
     cors: {
-        origin: ['https://fyndah.vercel.app', 'https://fyndah.com', 'http://localhost:5173', 'http://localhost:5174'],
+        origin: ['https://fyndah.vercel.app', 'https://fyndah.com', 'http://localhost:5173', 'http://localhost:5174', 'https://huge-rocket-tiny.on-fleek.app'],
         methods: ['GET', 'POST'],
         allowedHeaders: ['Content-Type', 'Authorization'],
         credentials: true
@@ -29,7 +29,7 @@ const io = socketIo(server, {
 app.use(bodyParser.json());
 
 app.use(cors({
-    origin: ['https://fyndah.vercel.app', 'https://fyndah.com', 'http://localhost:5173', 'http://localhost:5174'],
+    origin: ['https://fyndah.vercel.app', 'https://fyndah.com', 'http://localhost:5173', 'http://localhost:5174', 'https://huge-rocket-tiny.on-fleek.app'],
     methods: ['GET', 'POST', 'PUT', 'DELETE'],
     allowedHeaders: ['Content-Type', 'Authorization'],
     credentials: true,
