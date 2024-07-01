@@ -15,42 +15,6 @@ const WebSocket = require('ws');
 const wss = new WebSocket.Server({ port: 8080});
 
 // Create post
-// router.post('/post', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
-//     try {
-//         const { title, description} = req.body;
-//         const organizationId = req.user.organization_id
-//         console.log('req.user.email', req.user.email, req.user.id, req.user.username, req.user.organization_id);
-        
-//         // Debug log to check req.user
-//         console.log('req.user before creating post:', req.user.email);
-//         console.log('Request Body:', req.body);
-        
-//         // Optional image handling
-//         let imageUrl = '';
-//         if (req.file) {
-//             imageUrl = req.file.path; // Cloudinary URL
-//         }
-
-//         // Create new post
-//         const newPost = new Post({
-//             title,
-//             description,
-//             author: req.user.id,
-//             authorEmail: req.user.email,
-//             organization: organizationId,
-//             authorUsername: req.user.username,
-//             image: imageUrl // Add image URL to the post document
-//         });
-
-//         await newPost.save();
-
-//         res.status(201).json({ status: 'success', data: { post: newPost } });
-//     } catch (error) {
-//         console.error(error);
-//         res.status(500).json({ status: 'error', message: 'Internal server error' });
-//     }
-// });
-
 router.post('/post', authenticate, checkOrganization, upload.single('image'), async (req, res) => {
     try {
         const { title, description } = req.body;
@@ -65,9 +29,6 @@ router.post('/post', authenticate, checkOrganization, upload.single('image'), as
             headers: { Authorization: `Bearer ${req.token}` },
             timeout: 10000
         });
-
-        // Log the complete organization response to debug
-        console.log('Complete Organization API Response:', organizationResponse.data);
 
         // Extract the organizations array from the response
         const organizations = organizationResponse.data.data;
