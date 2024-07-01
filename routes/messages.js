@@ -1,9 +1,11 @@
 const express = require('express');
 const router = express.Router();
+const axios = require('axios');
 const Message = require('../models/message');
 const Conversation = require('../models/conversations');
 const authenticate = require('../middleware/authenticator');
-
+const nodemailer = require('nodemailer');
+const transporter = require('../utils/nodemailer');
 // Middleware to exclude soft deleted conversations and messages
 async function excludeSoftDeleted(req, res, next) {
     try {
@@ -92,67 +94,6 @@ router.get('/orgmessages/:conversationId', authenticate, excludeSoftDeletedForOr
     }
 });
 
-// router.post('/send-message/:conversationId', authenticate, async (req, res) => {
-//     const { conversationId } = req.params;
-//     const { message } = req.body;
-//     const senderName = req.user.username;
-//     const senderId = req.user.org_msg_id ? req.user.org_msg_id : req.user.msg_id;
-
-//     console.log('Received request to send message');
-//     console.log('conversationId:', conversationId);
-//     console.log('senderId:', senderId);
-
-//     try {
-//         // Check if the conversation exists and the sender is a member
-//         const conversation = await Conversation.findOne({
-//             _id: conversationId,
-//             members: { $in: [senderId] }
-//         });
-
-//         if (!conversation) {
-//             console.log('Conversation not found or sender is not a member');
-//             console.log('Conversation:', conversation);
-//             console.log('Sender ID:', senderId);
-//             return res.status(404).json({ error: 'Conversation not found or sender is not a member' });
-//         }
-
-//         // Find the recipient in the conversation members
-//         const recipientId = conversation.members.find(member => member !== senderId);
-//         if (!recipientId) {
-//             console.log('Recipient not found');
-//             return res.status(400).json({ error: 'Recipient not found' });
-//         }
-
-//         // Create a new message
-//         const newMessage = new Message({
-//             sender: senderName,
-//             conversationId,
-//             recipient: recipientId,
-//             senderId,
-//             message
-//         });
-
-//         // Save the message
-//         const savedMessage = await newMessage.save();
-//         const io = req.io;
-//         io.to(conversationId).emit('receiveMessage', { senderId, message });
-
-//         // Emit a notification to the recipient
-//         io.to(recipientId).emit('notification', { message: `New message from ${req.user.username}: ${message}` });
-
-//         // Update conversation metadata
-//         conversation.lastMessage = savedMessage._id;
-//         conversation.updatedAt = new Date();
-//         await conversation.save();
-
-//         console.log('Message sent successfully:', savedMessage);
-//         res.status(200).json(savedMessage);
-//     } catch (error) {
-//         console.error('Error sending message:', error.message);
-//         res.status(500).json({ error: 'Failed to send message' });
-//     }
-// });
-
 router.post('/send-message/org/:conversationId', authenticate, async (req, res) => {
     const { conversationId } = req.params;
     const { message } = req.body;
@@ -181,9 +122,52 @@ router.post('/send-message/org/:conversationId', authenticate, async (req, res) 
 
         // Find the recipient in the conversation members
         const recipientId = conversation.members.find(member => member !== senderId);
-        if (!recipientId) {
-            console.log('Recipient not found');
-            return res.status(400).json({ error: 'Recipient not found' });
+
+        // Ensure the recipient is a valid member and not undefined
+        if (!recipientId || !conversation.members.includes(recipientId)) {
+            console.log('Recipient not found or not a valid member of the conversation');
+            return res.status(400).json({ error: 'Recipient not found or not a valid member of the conversation' });
+        }
+
+        // Fetch recipient's details from external APIs using maps for quick lookup
+        let recipient;
+        try {
+            const userResponse = await axios.get('https://api.fyndah.com/api/v1/users/all', {
+                headers: { Authorization: `Bearer ${req.token}` },
+                timeout: 10000
+            });
+            const orgResponse = await axios.get('https://api.fyndah.com/api/v1/organization', {
+                headers: { Authorization: `Bearer ${req.token}` },
+                timeout: 10000
+            });
+
+            // Ensure userResponse.data and orgResponse.data.data are arrays
+            const usersArray = Array.isArray(userResponse.data.data) ? userResponse.data.data : [userResponse.data.data];
+            const orgsArray = Array.isArray(orgResponse.data.data) ? orgResponse.data.data : [orgResponse.data.data];
+
+            // Create maps for quick lookup
+            const userMap = new Map(usersArray.map(user => [user.msg_id, user]));
+            const orgMap = new Map(orgsArray.map(org => [org.msg_id, org]));
+
+            console.log('User Map Keys:', Array.from(userMap.keys()));
+            console.log('Org Map Keys:', Array.from(orgMap.keys()));
+
+            // Normalize recipientId
+            const normalizedRecipientId = recipientId.trim();
+
+            // Retrieve recipient details using maps
+            recipient = userMap.get(normalizedRecipientId) || orgMap.get(normalizedRecipientId);
+
+            console.log('Recipient ID:', normalizedRecipientId);
+            console.log('Recipient details:', recipient);
+
+            if (!recipient) {
+                console.log('Recipient not found in external APIs');
+                return res.status(404).json({ error: 'Recipient not found' });
+            }
+        } catch (error) {
+            console.error('Error fetching recipient details from external APIs:', error.message);
+            return res.status(500).json({ error: 'Failed to fetch recipient details' });
         }
 
         // Create a new message
@@ -198,7 +182,7 @@ router.post('/send-message/org/:conversationId', authenticate, async (req, res) 
         // Save the message
         const savedMessage = await newMessage.save();
         const io = req.io;
-        
+
         // Emit the message to the conversation room
         io.to(conversationId).emit('receiveMessage', { senderId, message });
 
@@ -209,6 +193,22 @@ router.post('/send-message/org/:conversationId', authenticate, async (req, res) 
         conversation.lastMessage = savedMessage._id;
         conversation.updatedAt = new Date();
         await conversation.save();
+
+        // Send email notification
+            const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: recipient.email,  // Ensure recipient object is defined and contains email property
+            subject: 'New Message on Fyndah',
+            text: `Hello ${recipient.username || recipient.name},\n\nYou have received a new message on Fyndah. Please log in to your account to view the message.\n\nBest regards,\nFyndah Team`
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                console.error('Error sending email:', error);
+            } else {
+                console.log('Email sent:', info.response);
+            }
+        });
 
         console.log('Message sent successfully:', savedMessage);
         res.status(200).json(savedMessage);
@@ -246,9 +246,52 @@ router.post('/send-message/user/:conversationId', authenticate, async (req, res)
 
         // Find the recipient in the conversation members
         const recipientId = conversation.members.find(member => member !== senderId);
-        if (!recipientId) {
-            console.log('Recipient not found');
-            return res.status(400).json({ error: 'Recipient not found' });
+
+        // Ensure the recipient is a valid member and not undefined
+        if (!recipientId || !conversation.members.includes(recipientId)) {
+            console.log('Recipient not found or not a valid member of the conversation');
+            return res.status(400).json({ error: 'Recipient not found or not a valid member of the conversation' });
+        }
+
+        // Fetch recipient's details from external APIs using maps for quick lookup
+        let recipient;
+        try {
+            const userResponse = await axios.get('https://api.fyndah.com/api/v1/users/all', {
+                headers: { Authorization: `Bearer ${req.token}` },
+                timeout: 10000
+            });
+            const orgResponse = await axios.get('https://api.fyndah.com/api/v1/organization', {
+                headers: { Authorization: `Bearer ${req.token}` },
+                timeout: 10000
+            });
+
+            // Ensure userResponse.data and orgResponse.data.data are arrays
+            const usersArray = Array.isArray(userResponse.data.data) ? userResponse.data.data : [userResponse.data.data];
+            const orgsArray = Array.isArray(orgResponse.data.data) ? orgResponse.data.data : [orgResponse.data.data];
+
+            // Create maps for quick lookup
+            const userMap = new Map(usersArray.map(user => [user.msg_id, user]));
+            const orgMap = new Map(orgsArray.map(org => [org.msg_id, org]));
+
+            console.log('User Map Keys:', Array.from(userMap.keys()));
+            console.log('Org Map Keys:', Array.from(orgMap.keys()));
+
+            // Normalize recipientId
+            const normalizedRecipientId = recipientId.trim();
+
+            // Retrieve recipient details using maps
+            recipient = userMap.get(normalizedRecipientId) || orgMap.get(normalizedRecipientId);
+
+            console.log('Recipient ID:', normalizedRecipientId);
+            console.log('Recipient details:', recipient);
+
+            if (!recipient) {
+                console.log('Recipient not found in external APIs');
+                return res.status(404).json({ error: 'Recipient not found' });
+            }
+        } catch (error) {
+            console.error('Error fetching recipient details from external APIs:', error.message);
+            return res.status(500).json({ error: 'Failed to fetch recipient details' });
         }
 
         // Create a new message
@@ -263,7 +306,7 @@ router.post('/send-message/user/:conversationId', authenticate, async (req, res)
         // Save the message
         const savedMessage = await newMessage.save();
         const io = req.io;
-        
+
         // Emit the message to the conversation room
         io.to(conversationId).emit('receiveMessage', { senderId, message });
 
@@ -274,6 +317,22 @@ router.post('/send-message/user/:conversationId', authenticate, async (req, res)
         conversation.lastMessage = savedMessage._id;
         conversation.updatedAt = new Date();
         await conversation.save();
+
+        // Send email notification
+        const mailOptions = {
+            from: process.env.EMAIL_USER,
+            to: recipient.email,  // Ensure recipient object is defined and contains email property
+            subject: 'New Message on Fyndah',
+            text: `Hello ${recipient.username || recipient.name},\n\nYou have received a new message on Fyndah. Please log in to your account to view the message.\n\nBest regards,\nFyndah Team`
+        };
+
+        transporter.sendMail(mailOptions, (error, info) => {
+            if (error) {
+                console.error('Error sending email:', error);
+            } else {
+                console.log('Email sent:', info.response);
+            }
+        });
 
         console.log('Message sent successfully:', savedMessage);
         res.status(200).json(savedMessage);
@@ -329,42 +388,59 @@ router.post('/webhook/user-registered', async (req, res) => {
         res.status(500).json({ error: 'Failed to process webhook' });
     }
 });
+router.post('/webhook/org-registered', async (req, res) => {
+    const { org_msg_id, org_name } = req.body;
 
-// router.post('/user/messages/read', authenticate, async (req, res) => {
-//     try {
-//         const { messageIds, isRead } = req.body;
+    try { 
+        // Check if welcome message already sent for this organization
+        const existingMessage = await Message.findOne({ recipient: org_msg_id });
 
-//         if (!Array.isArray(messageIds) || messageIds.length === 0) {
-//             return res.status(400).json({ error: 'messageIds must be a non-empty array' });
-//         }
+        if (existingMessage) {
+            console.log('Welcome message already sent for org:', org_name);
+            return res.status(200).json({ message: 'Welcome message already sent' });
+        }
+        //create a new conversation 
+        const conversation = new Conversation({
+            members: ['admin_msg_id', org_msg_id],
+            updatedAt: new Date()
+        });
 
-//         if (typeof isRead !== 'boolean') {
-//             return res.status(400).json({ error: 'isRead must be a boolean' });
-//         }
+        const savedConversation = await conversation.save()
 
-//         const userId = req.user.msg_id; // The authenticated user's ID
+        //create a welcome message
+        const welcomeMessage = new Message({
+            sender: 'Fyndah',
+            conversationId: savedConversation._id,
+            recipient: org_msg_id,
+            senderId: 'admin_msg_id',
+            message: `
+            Hello ${org_name},
 
-//         console.log(`User ID: ${userId}`);
+            Welcome to Fyndah! 🚀 We’re excited to help you connect with local customers.
+            
+            Set up your business profile to get started. 
+             (Add profile setup link ^) 
+            
+            Make sure to fund your wallet, check out our lead management tools and advertising opportunities to maximize your reach.
+             (Add respective links ^) 
+            
+            Need tips? We’ve got you covered with our resources and support. Let’s grow together!
+            
+             The Fyndah Team
+                 `,
+            createdAt: new Date()
+        });
+        
 
-//         // Find messages by IDs
-//         const messages = await Message.find({ _id: { $in: messageIds }, recipient: userId });
+        const savedMessage = await welcomeMessage.save();
 
-//         if (!messages || messages.length === 0) {
-//             return res.status(404).json({ error: 'Messages not found' });
-//         }
-
-//         // Update the read status for valid messages
-//         await Message.updateMany(
-//             { _id: { $in: messages.map(msg => msg._id) } },
-//             { $set: { isReadByRecipient: isRead } }
-//         );
-
-//         res.status(200).json({ message: 'Messages updated successfully' });
-//     } catch (error) {
-//         console.error('Error updating message read status:', error);
-//         res.status(500).json({ error: 'Something went wrong' });
-//     }
-// });
+        console.log('Welcome message sent successfully:', savedMessage);
+        res.status(200).json({ success: true, savedMessage});
+    } catch (error) {
+        console.error('Error handling user registration webhook:', error.message);
+        res.status(500).json({ error: 'Failed to process webhook' });
+    }
+});
 
 router.post('/user/messages/read', authenticate, async (req, res) => {
     try {
@@ -429,7 +505,7 @@ router.post('/organization/messages/read', authenticate, async (req, res) => {
        
 
        // Find messages by conversation ID and recipient ID
-       const messages = await Message.find({ conversationId, recipient: userId });
+       const messages = await Message.find({ conversationId, recipient: organizationId });
 
        if (!messages || messages.length === 0) {
            return res.status(404).json({ error: 'Messages not found' });
@@ -571,11 +647,10 @@ router.get('/org/messages/unread', authenticate, async (req, res) => {
 });
 
 // Route to toggle archive status (user)
-
-router.post('/user/messages/:messageId/toggle-archive', authenticate, async (req, res) => {
+router.post('/user/:messageId/toggle-archive', authenticate, async (req, res) => {
     try {
         const { messageId } = req.params;
-        const userId = req.user.msg_id; // User ID (can be either user or organization)
+        const userId = req.user.msg_id; 
         
         // Find the message by ID
         const message = await Message.findById(messageId);
@@ -605,10 +680,8 @@ router.post('/user/messages/:messageId/toggle-archive', authenticate, async (req
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
-
 // Retrieve archived messages
-router.get('/messages/archived', authenticate, async (req, res) => {
+router.get('/user/archived-messages', authenticate, async (req, res) => {
     const userId = req.user.msg_id; //user's message id
 
     try {
@@ -659,10 +732,8 @@ router.post('/org/:messageId/toggle-archive', authenticate, async (req, res) => 
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
-
 // Retrieve archived messages (org)
-router.get('/org/messages/archived', authenticate, async (req, res) => {
+router.get('/org/archived-messages', authenticate, async (req, res) => {
     const userId = req.user.org_msg_id; // User ID (can be either user or organization)
 
     try {
@@ -714,11 +785,9 @@ router.post('/user/messages/:messageId/toggle-star', authenticate, async (req, r
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
-
 // Retrieve star messages (user)
 router.get('/user/messages/archived', authenticate, async (req, res) => {
-    const userId = req.user.org_msg_id; // User ID (can be either user or organization)
+    const userId = req.user.org_msg_id; 
 
     try {
         // Find stared messages where the user is either the sender or recipient
@@ -850,7 +919,6 @@ router.delete('/delete/conversation/:conversationId', authenticate, async (req, 
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
 
 // Route to soft delete a conversation and its messages for an organization as sender or recipient
 router.delete('/delete/org/conversation/:conversationId', authenticate, async (req, res) => {
