@@ -204,7 +204,7 @@ router.post('/send-message/org/:conversationId', authenticate, async (req, res) 
             from: process.env.EMAIL_USER,
             to: recipient.email,  // Ensure recipient object is defined and contains email property
             subject: 'New Message on Fyndah',
-            text: `Hello ${recipient.org_name || recipient.username},\n\nYou have received a new message on Fyndah. Please log in to your account to view the message.\n\nBest regards,\nFyndah Team`
+            text: `Hello ${recipient.org_name || recipient.username},\n\nYou have received a new message on Fyndah. Please log in to your account to view the message - https://fyndah.com/login.\n\nBest regards,\nFyndah Team`
         };
 
         transporter.sendMail(mailOptions, (error, info) => {
@@ -335,7 +335,7 @@ router.post('/send-message/user/:conversationId', authenticate, async (req, res)
             from: process.env.EMAIL_USER,
             to: recipient.email,  // Ensure recipient object is defined and contains email property
             subject: 'New Message on Fyndah',
-            text: `Hello ${recipient.org_name || recipient.username},\n\nYou have received a new message on Fyndah. Please log in to your account to view the message.\n\nBest regards,\nFyndah Team`
+            text: `Hello ${recipient.org_name || recipient.username},\n\nYou have received a new message on Fyndah. Please log in to your account to view the message - https://fyndah.com/login.\n\nBest regards,\nFyndah Team`
         };
 
         transporter.sendMail(mailOptions, (error, info) => {
@@ -373,7 +373,7 @@ router.post('/webhook/user-registered', async (req, res) => {
         });
 
         const savedConversation = await conversation.save()
-
+        const correctUsername = username || Fyndee
         //create a welcome message
         const welcomeMessage = new Message({
             sender: 'Fyndah',
@@ -381,7 +381,7 @@ router.post('/webhook/user-registered', async (req, res) => {
             recipient: msg_id,
             senderId: 'admin_msg_id',
             message: `
-                Welcome to Fyndah, ${username} 🎉
+                Welcome to Fyndah, ${correctUsername} 🎉
                 We're thrilled to have you on board. Start exploring local businesses and services right away. Don’t forget to complete your profile to get the best recommendations and make the most of your Fyndah experience.
                 Need to setup your Business account? Go to "Create business profile" - https://fyndah.com/dashboard/createbuisness
                 Need help? Check out our support resources or reach out to us anytime. Happy discovering!
@@ -400,8 +400,9 @@ router.post('/webhook/user-registered', async (req, res) => {
         res.status(500).json({ error: 'Failed to process webhook' });
     }
 });
+
 router.post('/webhook/org-registered', async (req, res) => {
-    const { org_msg_id, org_name } = req.body;
+    const { org_msg_id, org_name, org_id } = req.body;
 
     try { 
         // Check if welcome message already sent for this organization
@@ -431,9 +432,11 @@ router.post('/webhook/org-registered', async (req, res) => {
             Welcome to Fyndah! 🚀 We’re excited to help you connect with local customers.
             
             Set up your business profile to get started. 
-             (Add profile setup link ^)     
+            https://fyndah.com/businessDashboard/${org_id}/${org_name}/business-profile   
+
             Make sure to fund your wallet, check out our lead management tools and advertising opportunities to maximize your reach.
-             (Add respective links ^) 
+             Fund Wallet: https://fyndah.com/businessDashboard/${org_id}/${org_name}/wallet
+             Leads: https://fyndah.com/businessDashboard/${org_id}/${org_name}/leads
             
             Need tips? We’ve got you covered with our resources and support. Let’s grow together!
             
