@@ -202,7 +202,7 @@ router.delete('/post/:postId', authenticate, checkOrganization,  async (req, res
 router.get('/homePage', async (req, res) => {
     try {
         // Querying posts and populating comments and likes
-        const posts = await Post.find().populate('comments likes');
+        const posts = await Post.find().sort({ createdAt: -1 }).populate('comments likes');
 
         // Adding total number of likes for each post
         const postsWithLikeCount = posts.map(post => {

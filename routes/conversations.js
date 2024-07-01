@@ -102,7 +102,8 @@ router.get('/orgconversations/:org_msg_Id', authenticate, async (req, res) => {
          // Fetch conversations for the organization excluding soft deleted ones
          const conversations = await Conversation.find({
                         members: org_msg_Id,
-                        deletedFor: { $ne: orgId }
+                        deletedFor: { $ne: orgId },
+                        isArchivedFor: false
                     }).sort({ updatedAt: -1 });
 
         if (!conversations || conversations.length === 0) {
@@ -217,7 +218,8 @@ router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, 
         // Fetch conversations for the authenticated user
         const conversations = await Conversation.find({
                         members: user_msg_Id,
-                        deletedFor: { $ne: userId }
+                        deletedFor: { $ne: userId },
+                        isArchivedFor: false
                     }).sort({ updatedAt: -1 });
 
         if (!conversations || conversations.length === 0) {

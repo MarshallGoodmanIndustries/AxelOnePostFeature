@@ -381,9 +381,9 @@ router.post('/webhook/user-registered', async (req, res) => {
             recipient: msg_id,
             senderId: 'admin_msg_id',
             message: `
-                ${username}
                 Welcome to Fyndah, ${username} 🎉
                 We're thrilled to have you on board. Start exploring local businesses and services right away. Don’t forget to complete your profile to get the best recommendations and make the most of your Fyndah experience.
+                Need to setup your Business account? Go to "Create business profile" - https://fyndah.com/dashboard/createbuisness
                 Need help? Check out our support resources or reach out to us anytime. Happy discovering!
                 The Fyndah Team 
                  `,
@@ -431,8 +431,7 @@ router.post('/webhook/org-registered', async (req, res) => {
             Welcome to Fyndah! 🚀 We’re excited to help you connect with local customers.
             
             Set up your business profile to get started. 
-             (Add profile setup link ^) 
-            
+             (Add profile setup link ^)     
             Make sure to fund your wallet, check out our lead management tools and advertising opportunities to maximize your reach.
              (Add respective links ^) 
             
@@ -616,7 +615,6 @@ router.get('/user/messages/unread', authenticate, async (req, res) => {
     }
 });
 
-
 router.get('/org/messages/unread', authenticate, async (req, res) => {
     try {
         const recipientId = req.user.org_msg_id;
@@ -660,115 +658,102 @@ router.get('/org/messages/unread', authenticate, async (req, res) => {
 });
 
 // Route to toggle archive status (user)
-router.post('/user/:messageId/toggle-archive', authenticate, async (req, res) => {
+router.post('/user/:conversationId/toggle-archive', authenticate, async (req, res) => {
     try {
-        const { messageId } = req.params;
+        const { conversationId } = req.params;
         const userId = req.user.msg_id; 
-        
-        // Find the message by ID
-        const message = await Message.findById(messageId);
 
-        if (!message) {
-            return res.status(404).json({ error: 'Message not found' });
+        // Find the conversation by ID
+        const conversation = await Conversation.findById(conversationId);
+
+        if (!conversation) {
+            return res.status(404).json({ error: 'Conversation not found' });
         }
 
-        // Determine if the user is the sender or recipient and toggle the respective field
-        if (message.senderId.toString() === userId || message.recipient.toString() === userId) {
-            if (message.senderId.toString() === userId) {
-                // Toggle archive status for the sender
-                message.isArchivedBySender = !message.isArchivedBySender;
-            }
-            if (message.recipient.toString() === userId) {
-                // Toggle archive status for the recipient
-                message.isArchivedByRecipient = !message.isArchivedByRecipient;
-            }
-            // Save the updated message
-            await message.save();
-            res.status(200).json(message);
+        // Determine if the user is part of the conversation and toggle the archive status
+        if (conversation.members.includes(userId)) {
+            conversation.isArchivedFor = !conversation.isArchivedFor;
+            // Save the updated conversation
+            await conversation.save();
+            res.status(200).json(conversation);
         } else {
-            return res.status(403).json({ error: 'You are not authorized to update this message' });
+            return res.status(403).json({ error: 'You are not authorized to update this conversation' });
         }
     } catch (error) {
-        console.error('Error toggling message archive status:', error);
+        console.error('Error toggling conversation archive status:', error);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-// Retrieve archived messages
+
+// Retrieve archived conversations for user
 router.get('/user/archived-messages', authenticate, async (req, res) => {
-    const userId = req.user.msg_id; //user's message id
+    const userId = req.user.msg_id; // User's message ID
 
     try {
-        // Find archived messages where the user is either the sender or recipient
-        const archivedMessages = await Message.find({
-            $or: [
-                { recipient: userId, isArchivedByRecipient: true },
-                { senderId: userId, isArchivedBySender: true }
-            ]
-        }).sort({ timestamp: -1 });
+        // Find archived conversations where the user is a member
+        const archivedConversations = await Conversation.find({
+            members: userId,
+            isArchivedFor: true
+        }).sort({ updatedAt: -1 });
 
-        res.status(200).json(archivedMessages);
+        res.status(200).json(archivedConversations);
     } catch (err) {
-        console.error('Error retrieving archived messages:', err);
+        console.error('Error retrieving archived conversations:', err);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-router.post('/org/:messageId/toggle-archive', authenticate, async (req, res) => {
-    try {
-        const { messageId } = req.params;
-        const userId = req.user.org_msg_id; // User ID (can be either user or organization)
-        
-        // Find the message by ID
-        const message = await Message.findById(messageId);
 
-        if (!message) {
-            return res.status(404).json({ error: 'Message not found' });
+// Route to toggle archive status (organization)
+router.post('/org/:conversationId/toggle-archive', authenticate, async (req, res) => {
+    try {
+        const { conversationId } = req.params;
+        const orgId = req.user.org_msg_id; // Organization ID
+        
+        // Find the conversation by ID
+        const conversation = await Conversation.findById(conversationId);
+
+        if (!conversation) {
+            return res.status(404).json({ error: 'Conversation not found' });
         }
 
-        // Determine if the user is the sender or recipient and toggle the respective field
-        if (message.senderId.toString() === userId || message.recipient.toString() === userId) {
-            if (message.senderId.toString() === userId) {
-                // Toggle archive status for the sender
-                message.isArchivedBySender = !message.isArchivedBySender;
-            }
-            if (message.recipient.toString() === userId) {
-                // Toggle archive status for the recipient
-                message.isArchivedByRecipient = !message.isArchivedByRecipient;
-            }
-            // Save the updated message
-            await message.save();
-            res.status(200).json(message);
+        // Determine if the organization is part of the conversation and toggle the archive status
+        if (conversation.members.includes(orgId)) {
+            conversation.isArchivedFor = !conversation.isArchivedFor;
+            // Save the updated conversation
+            await conversation.save();
+            res.status(200).json(conversation);
         } else {
-            return res.status(403).json({ error: 'You are not authorized to update this message' });
+            return res.status(403).json({ error: 'You are not authorized to update this conversation' });
         }
     } catch (error) {
-        console.error('Error toggling message archive status:', error);
+        console.error('Error toggling conversation archive status:', error);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-// Retrieve archived messages (org)
+
+// Retrieve archived conversations for organization
 router.get('/org/archived-messages', authenticate, async (req, res) => {
-    const userId = req.user.org_msg_id; // User ID (can be either user or organization)
+    const orgId = req.user.org_msg_id; // Organization's message ID
 
     try {
-        // Find archived messages where the user is either the sender or recipient
-        const archivedMessages = await Message.find({
-            $or: [
-                { recipient: userId, isArchivedByRecipient: true },
-                { senderId: userId, isArchivedBySender: true }
-            ]
-        }).sort({ timestamp: -1 });
+        // Find archived conversations where the organization is a member
+        const archivedConversations = await Conversation.find({
+            members: orgId,
+            isArchivedFor: true
+        }).sort({ updatedAt: -1 });
 
-        res.status(200).json(archivedMessages);
+        res.status(200).json(archivedConversations);
     } catch (err) {
-        console.error('Error retrieving archived messages:', err);
+        console.error('Error retrieving archived conversations:', err);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
 
-router.post('/user/messages/:messageId/toggle-star', authenticate, async (req, res) => {
+//Stared messages
+router.post('/user/:messageId/toggle-star', authenticate, async (req, res) => {
     try {
         const { messageId } = req.params;
-        const userId = req.user.org_msg_id; // User ID (can be either user or organization)
+        const userId = req.user.msg_id;
         
         // Find the message by ID
         const message = await Message.findById(messageId);
@@ -798,9 +783,10 @@ router.post('/user/messages/:messageId/toggle-star', authenticate, async (req, r
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
+
 // Retrieve star messages (user)
-router.get('/user/messages/archived', authenticate, async (req, res) => {
-    const userId = req.user.org_msg_id; 
+router.get('/user/star', authenticate, async (req, res) => {
+    const userId = req.user.msg_id; 
 
     try {
         // Find stared messages where the user is either the sender or recipient
@@ -819,10 +805,10 @@ router.get('/user/messages/archived', authenticate, async (req, res) => {
 });
 
 //toggle star status for org
-router.post('/org/messages/:messageId/toggle-star', authenticate, async (req, res) => {
+router.post('/org/:messageId/toggle-star', authenticate, async (req, res) => {
     try {
         const { messageId } = req.params;
-        const userId = req.user.org_msg_id; // User ID (can be either user or organization)
+        const orgId = req.user.org_msg_id;
         
         // Find the message by ID
         const message = await Message.findById(messageId);
@@ -832,12 +818,12 @@ router.post('/org/messages/:messageId/toggle-star', authenticate, async (req, re
         }
 
         // Determine if the user is the sender or recipient and toggle the respective field
-        if (message.senderId.toString() === userId || message.recipient.toString() === userId) {
-            if (message.senderId.toString() === userId) {
+        if (message.senderId.toString() === orgId || message.recipient.toString() === orgId) {
+            if (message.senderId.toString() === orgId) {
                 // Toggle star status for the sender
                 message.isStaredBySender = !message.isStaredBySender;
             }
-            if (message.recipient.toString() === userId) {
+            if (message.recipient.toString() === orgId) {
                 // Toggle star status for the recipient
                 message.isStaredByRecipient = !message.isStaredByRecipient;
             }
@@ -854,15 +840,15 @@ router.post('/org/messages/:messageId/toggle-star', authenticate, async (req, re
 });
 
 // Retrieve stared messages messages (org)
-router.get('/org/messages/archived', authenticate, async (req, res) => {
-    const userId = req.user.org_msg_id; // User ID (can be either user or organization)
+router.get('/org/star', authenticate, async (req, res) => {
+    const orgId = req.user.org_msg_id; // User ID (can be either user or organization)
 
     try {
         // Find stared messages where the user is either the sender or recipient
         const staredMessages = await Message.find({
             $or: [
-                { recipient: userId, isStaredByRecipient: true },
-                { senderId: userId, isStaredBySender: true }
+                { recipient: orgId, isStaredByRecipient: true },
+                { senderId: orgId, isStaredBySender: true }
             ]
         }).sort({ timestamp: -1 });
 
@@ -872,7 +858,6 @@ router.get('/org/messages/archived', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
 
 router.delete('/delete/:messageId', authenticate, async (req, res) => {
     try {
@@ -905,8 +890,8 @@ router.delete('/delete/conversation/:conversationId', authenticate, async (req, 
         }
 
         // Determine if the user is the sender or recipient
-        const isSender = conversation.members.includes(userId);
-        if (!isSender) {
+        const isMember = conversation.members.includes(userId);
+        if (!isMember) {
             return res.status(403).json({ error: 'You are not authorized to delete this conversation' });
         }
 
@@ -972,6 +957,7 @@ router.delete('/delete/org/conversation/:conversationId', authenticate, async (r
 });
 
 
+/////////////////////////////////TAGS AND CATEGORIES////////////////////////////////////
 // Endpoint for tagging and categorizing messages
 router.post('/messages/:messageId/tag', authenticate, async (req, res) => {
     try {

@@ -13,6 +13,10 @@ const ConversationSchema = new mongoose.Schema({
         type: [String], 
         default: [] 
     },
+    isArchivedFor: { 
+        type: Boolean, 
+        default: false 
+    },
     updatedAt: { type: Date, default: Date.now }
 }, { 
     timestamps: true 

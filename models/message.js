@@ -27,16 +27,6 @@ const messageSchema = new mongoose.Schema({
     default: Date.now,
     index: true
   },
-  isArchivedBySender: {
-    type: Boolean,
-    default: false,
-    index: true
-  },
-  isArchivedByRecipient: {
-    type: Boolean,
-    default: false,
-    index: true
-  },
   isStaredBySender: {
     type: Boolean,
     default: false,
@@ -78,8 +68,6 @@ const messageSchema = new mongoose.Schema({
 // Indexes to optimize query performance
 messageSchema.index({ sender: 1, recipient: 1 });
 messageSchema.index({ recipient: 1, isReadByRecipient: 1 });
-messageSchema.index({ recipient: 1, isArchivedByRecipient: 1 });
-messageSchema.index({ sender: 1, isArchivedBySender: 1 });
 messageSchema.index({ recipient: 1, isStaredByRecipient: 1 });
 messageSchema.index({ sender: 1, isStaredBySender: 1 });
 messageSchema.index({ recipient: 1, tagsByRecipient: 1 });
