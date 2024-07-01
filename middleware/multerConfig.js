@@ -23,22 +23,13 @@ const fileFilter = (req, file, cb) => {
 
 const storage = new CloudinaryStorage({
     cloudinary: cloudinary,
-    params: async (req, file) => {
-        // Resize image to 300x200 pixels using sharp
-        const resizedImageBuffer = await sharp(file.buffer)
-            .resize({ width: 300, height: 200 })
-            .toBuffer();
-
-        // Return upload parameters
-        return {
-            folder: 'EHR', // Cloudinary folder
-            public_id: `${Date.now()}-${file.originalname.toLowerCase().replace(/ /g, '-')}`, // Unique public ID
-            resource_type: 'auto', // Automatically detect the resource type (image/video/raw)
-            format: 'png', // Format to save in Cloudinary (adjust as needed)
-            transformation: [{ quality: 'auto' }], // Transformation options (optional)
-        };
+    params: {
+        folder: 'EHR',
+        public_id: (req, file) => `${Date.now()}-${file.originalname.toLowerCase()}`,
+        format: async (req, file) => 'jpg', // Force jpg format
     },
-});
+    transformation: [{ width: 300, height: 200, crop: 'limit' }],
+});	
 
 const upload = multer({
 	fileFilter,
