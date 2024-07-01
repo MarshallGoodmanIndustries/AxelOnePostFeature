@@ -9,11 +9,9 @@ const ConversationSchema = new mongoose.Schema({
         type: mongoose.Schema.Types.ObjectId, 
         ref: 'Message' 
     },
-    deletedForSender: { 
-       type: String, default: null 
-    },
-    deletedForRecipient: { 
-        type: String, default: null 
+    deletedFor: { 
+        type: [String], 
+        default: [] 
     },
     updatedAt: { type: Date, default: Date.now }
 }, { 

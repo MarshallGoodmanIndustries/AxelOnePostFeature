@@ -51,11 +51,9 @@ const messageSchema = new mongoose.Schema({
     type: Boolean,
     default: false
   },
-  deletedForSender: { 
-    type: String, default: null 
-  },
-  deletedForRecipient: { 
-    type: String, default: null 
+  deletedFor: { 
+    type: [String], 
+    default: [] 
   },
   tagsBySender: {
     type: [String],

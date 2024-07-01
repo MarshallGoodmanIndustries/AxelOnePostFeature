@@ -21,23 +21,6 @@ async function excludeSoftDeleted(req, res, next) {
     }
 }
 
-// Middleware to exclude soft deleted conversations and messages for organizations
-async function excludeSoftDeletedForOrg(req, res, next) {
-    try {
-        const orgId = req.user.org_msg_id;
-
-        if (!orgId) {
-            return res.status(400).json({ error: 'Organization ID not found' });
-        }
-
-        req.orgId = orgId;
-        next();
-    } catch (error) {
-        console.error('Error excluding soft deleted for organizations:', error);
-        res.status(500).json({ error: 'Something went wrong' });
-    }
-}
-
 // Create a new conversation
 router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
     let receiverId = req.params.receiverId.trim(); // Trim whitespace from receiverId
@@ -74,9 +57,9 @@ router.post('/newconversation/:receiverId', authenticate, async (req, res) => {
 });
 
 // Route to get conversations for an organization excluding soft deleted ones
-router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForOrg, async (req, res) => {
+router.get('/orgconversations/:org_msg_Id', authenticate, async (req, res) => {
     const { org_msg_Id } = req.params;
-    const orgId = req.orgId;
+    const orgId = req.user.org_msg_id;
 
     try {
         const options = {
@@ -91,7 +74,6 @@ router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForO
         try {
             const allUsersResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/users/all', options);
             allUsers = allUsersResponse.data;
-            console.log('Fetched users:', allUsers);
         } catch (error) {
             console.error('Error fetching users:', error.message);
             return res.status(500).json({ error: 'Failed to fetch users' });
@@ -100,7 +82,6 @@ router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForO
         try {
             const allOrganizationsResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/organization', options);
             allOrganizations = allOrganizationsResponse.data;
-            console.log('Fetched organizations:', allOrganizations);
         } catch (error) {
             console.error('Error fetching organizations:', error.message);
             return res.status(500).json({ error: 'Failed to fetch organizations' });
@@ -117,17 +98,12 @@ router.get('/orgconversations/:org_msg_Id', authenticate, excludeSoftDeletedForO
             return map;
         }, {});
 
-        console.log('User Map:', userMap);
-        console.log('Organization Map:', organizationMap);
-
-        // Fetch conversations for the organization
-        const conversations = await Conversation.find({ 
-            members: org_msg_Id,
-            $or: [
-                { deletedForSender: { $ne: orgId } },
-                { deletedForRecipient: { $ne: orgId } }
-            ]
-        }).sort({ updatedAt: -1 });
+        console.log({message: "org message id:", orgId})
+         // Fetch conversations for the organization excluding soft deleted ones
+         const conversations = await Conversation.find({
+                        members: org_msg_Id,
+                        deletedFor: { $ne: orgId }
+                    }).sort({ updatedAt: -1 });
 
         if (!conversations || conversations.length === 0) {
             return res.status(404).json({ error: 'No conversations found for this organization' });
@@ -193,7 +169,6 @@ res.status(200).json(results);
     }
 });
 
-// Route to get conversations for a user excluding soft deleted ones
 router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, async (req, res) => {
     const user_msg_Id = req.params.user_msg_Id;
     const userId = req.userId;
@@ -240,13 +215,10 @@ router.get('/userconversations/:user_msg_Id', authenticate, excludeSoftDeleted, 
         console.log('Organization Map:', organizationMap);
 
         // Fetch conversations for the authenticated user
-        const conversations = await Conversation.find({ 
-            members: user_msg_Id, 
-            $or: [
-                { deletedForSender: { $ne: userId } },
-                { deletedForRecipient: { $ne: userId } }
-            ]
-        }).sort({ updatedAt: -1 });
+        const conversations = await Conversation.find({
+                        members: user_msg_Id,
+                        deletedFor: { $ne: userId }
+                    }).sort({ updatedAt: -1 });
 
         if (!conversations || conversations.length === 0) {
             return res.status(404).json({ error: 'No conversations found for this user' });

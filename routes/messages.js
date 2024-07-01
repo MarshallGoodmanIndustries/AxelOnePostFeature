@@ -4,7 +4,6 @@ const axios = require('axios');
 const Message = require('../models/message');
 const Conversation = require('../models/conversations');
 const authenticate = require('../middleware/authenticator');
-const nodemailer = require('nodemailer');
 const transporter = require('../utils/nodemailer');
 // Middleware to exclude soft deleted conversations and messages
 async function excludeSoftDeleted(req, res, next) {
@@ -149,8 +148,6 @@ router.post('/send-message/org/:conversationId', authenticate, async (req, res) 
             const userMap = new Map(usersArray.map(user => [user.msg_id, user]));
             const orgMap = new Map(orgsArray.map(org => [org.msg_id, org]));
 
-            console.log('User Map Keys:', Array.from(userMap.keys()));
-            console.log('Org Map Keys:', Array.from(orgMap.keys()));
 
             // Normalize recipientId
             const normalizedRecipientId = recipientId.trim();
@@ -181,6 +178,14 @@ router.post('/send-message/org/:conversationId', authenticate, async (req, res) 
 
         // Save the message
         const savedMessage = await newMessage.save();
+
+          // Remove soft delete flags for recipient
+          if (recipientId === conversation.members[0]) {
+            conversation.deletedForSender = null;
+        } else if (recipientId === conversation.members[1]) {
+            conversation.deletedForRecipient = null;
+        }
+
         const io = req.io;
 
         // Emit the message to the conversation room
@@ -199,7 +204,7 @@ router.post('/send-message/org/:conversationId', authenticate, async (req, res) 
             from: process.env.EMAIL_USER,
             to: recipient.email,  // Ensure recipient object is defined and contains email property
             subject: 'New Message on Fyndah',
-            text: `Hello ${recipient.username || recipient.name},\n\nYou have received a new message on Fyndah. Please log in to your account to view the message.\n\nBest regards,\nFyndah Team`
+            text: `Hello ${recipient.org_name || recipient.username},\n\nYou have received a new message on Fyndah. Please log in to your account to view the message.\n\nBest regards,\nFyndah Team`
         };
 
         transporter.sendMail(mailOptions, (error, info) => {
@@ -305,6 +310,13 @@ router.post('/send-message/user/:conversationId', authenticate, async (req, res)
 
         // Save the message
         const savedMessage = await newMessage.save();
+        
+          // Remove soft delete flags for recipient
+          const recipientIndex = conversation.deletedFor.indexOf(recipientId);
+          if (recipientIndex !== -1) {
+              conversation.deletedFor.splice(recipientIndex, 1);
+          }
+
         const io = req.io;
 
         // Emit the message to the conversation room
@@ -323,7 +335,7 @@ router.post('/send-message/user/:conversationId', authenticate, async (req, res)
             from: process.env.EMAIL_USER,
             to: recipient.email,  // Ensure recipient object is defined and contains email property
             subject: 'New Message on Fyndah',
-            text: `Hello ${recipient.username || recipient.name},\n\nYou have received a new message on Fyndah. Please log in to your account to view the message.\n\nBest regards,\nFyndah Team`
+            text: `Hello ${recipient.org_name || recipient.username},\n\nYou have received a new message on Fyndah. Please log in to your account to view the message.\n\nBest regards,\nFyndah Team`
         };
 
         transporter.sendMail(mailOptions, (error, info) => {
@@ -473,6 +485,7 @@ router.post('/user/messages/read', authenticate, async (req, res) => {
 
         // Emit the read status change to all relevant clients
         const io = req.io;
+
         io.to(conversationId).emit('messageRead', {
             conversationId,
             isRead
@@ -897,13 +910,15 @@ router.delete('/delete/conversation/:conversationId', authenticate, async (req, 
             return res.status(403).json({ error: 'You are not authorized to delete this conversation' });
         }
 
-        // Soft delete the conversation for the sender or recipient
-        if (conversation.members[0] === userId) {
-            conversation.deletedForSender = userId;
-        } else if (conversation.members[1] === userId) {
-            conversation.deletedForRecipient = userId;
-        }
+       // Add orgId to the deletedFor array
+       conversation.deletedFor.push(userId);
+       await conversation.save();
 
+       // Add orgId to the deletedFor array in all messages in this conversation
+       await Message.updateMany(
+           { conversationId },
+           { $addToSet: { deletedFor: userId } }
+       );
         await conversation.save();
 
         // Soft delete the messages for the sender or recipient
@@ -933,26 +948,20 @@ router.delete('/delete/org/conversation/:conversationId', authenticate, async (r
             return res.status(404).json({ error: 'Conversation not found' });
         }
 
-        // Determine if the organization is the sender or recipient
+        // Determine if the organization is a member of the conversation
         const isMember = conversation.members.includes(orgId);
         if (!isMember) {
             return res.status(403).json({ error: 'You are not authorized to delete this conversation' });
         }
 
-        // Soft delete the conversation for the sender or recipient
-        if (conversation.members[0] === orgId) {
-            conversation.deletedForSender = orgId;
-        } else if (conversation.members[1] === orgId) {
-            conversation.deletedForRecipient = orgId;
-        }
-
+        // Add orgId to the deletedFor array
+        conversation.deletedFor.push(orgId);
         await conversation.save();
 
-        // Soft delete the messages for the sender or recipient
-        const updateField = conversation.members[0] === orgId ? 'deletedForSender' : 'deletedForRecipient';
+        // Add orgId to the deletedFor array in all messages in this conversation
         await Message.updateMany(
             { conversationId },
-            { $set: { [updateField]: orgId } }
+            { $addToSet: { deletedFor: orgId } }
         );
 
         res.status(200).json({ message: 'Conversation and its messages soft deleted successfully' });
@@ -961,6 +970,7 @@ router.delete('/delete/org/conversation/:conversationId', authenticate, async (r
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
+
 
 // Endpoint for tagging and categorizing messages
 router.post('/messages/:messageId/tag', authenticate, async (req, res) => {
@@ -996,7 +1006,6 @@ router.post('/messages/:messageId/tag', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
 
 // Retrieve messages by tags
 router.get('/messages/tagged/:tag', authenticate, async (req, res) => {
