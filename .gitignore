@@ -1,6 +1,6 @@
 .env
 node_modules
-migration
+migration.js
 testScript
 seedPostScript
 seed.json
