@@ -693,15 +693,98 @@ router.get('/user/archived-messages', authenticate, async (req, res) => {
     const userId = req.user.msg_id; // User's message ID
 
     try {
+        const options = {
+            headers: { Authorization: `Bearer ${req.token}` },
+            timeout: 10000
+        };
+        const allUsersResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/users/all', options);
+        const allUsers = allUsersResponse.data;
+        console.log('Fetched users:', allUsers);
+
+        const allOrganizationsResponse = await fetchWithRetry('https://api.fyndah.com/api/v1/organization', options);
+        const allOrganizations = allOrganizationsResponse.data;
+        console.log('Fetched organizations:', allOrganizations);
+
+        // Create maps for quick lookup
+        const userMap = allUsers.reduce((map, user) => {
+            map[user.msg_id] = user;
+            return map;
+        }, {});
+
+        const organizationMap = allOrganizations.reduce((map, org) => {
+            map[org.msg_id] = org;
+            return map;
+        }, {});
+
         // Find archived conversations where the user is a member
         const archivedConversations = await Conversation.find({
             members: userId,
             isArchivedFor: true
         }).sort({ updatedAt: -1 });
 
-        res.status(200).json(archivedConversations);
+        if (!archivedConversations || archivedConversations.length === 0) {
+            return res.status(404).json({ error: 'No conversations found for this user' });
+        }
+
+        // Find unread messages for the recipient
+        const unreadMessages = await Message.find({ recipient: userId, isReadByRecipient: false });
+
+        // Group unread messages by conversation ID and count them
+        const unreadMessagesByConversation = unreadMessages.reduce((acc, message) => {
+            const { conversationId } = message;
+            if (!acc[conversationId]) {
+                acc[conversationId] = 0;
+            }
+            acc[conversationId]++;
+            return acc;
+        }, {});
+
+        // Map conversations to include member names, logos, and profile photo paths dynamically
+        const results = await Promise.all(archivedConversations.map(async (convo) => {
+            // Ensure the logged-in user's ID
+            const loggedInUserId = userId;
+
+            // Find the index of the logged-in user in the members array
+            const loggedInUserIndex = convo.members.findIndex(member => member === loggedInUserId);
+
+            // Ensure the other member's ID is at index 1
+            if (loggedInUserIndex !== -1 && convo.members.length > 1) {
+                // Swap the members so that the other member is at index 1
+                const otherMemberIndex = loggedInUserIndex === 0 ? 1 : 0;
+                [convo.members[1], convo.members[otherMemberIndex]] = [convo.members[otherMemberIndex], convo.members[1]];
+            }
+
+            // Fetch detailed member information
+            const detailedMembers = await Promise.all(convo.members.map(async member => {
+                const memberInfo = await getNameById(member, userMap, organizationMap);
+                return {
+                    id: member,
+                    name: member === 'admin_msg_id' ? 'Fyndah' : memberInfo.name, // Replace 'admin_msg_id' with 'Fyndah'
+                    profilePhotoPath: memberInfo.profilePhotoPath,
+                    logo: memberInfo.logo
+                };
+            }));
+
+            // Find last message for the conversation
+            const lastMessage = await Message.findOne({ conversationId: convo._id })
+                .sort({ createdAt: -1 })
+                .select('message createdAt');
+
+            return {
+                _id: convo._id,
+                members: detailedMembers,
+                updatedAt: convo.updatedAt,
+                lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
+                unreadCount: unreadMessagesByConversation[convo._id] || 0,
+                __v: convo.__v
+            };
+        }));
+
+        // Return the results
+        res.status(200).json(results);
+
     } catch (err) {
-        console.error('Error retrieving archived conversations:', err);
+        console.error('Error fetching archives:', err.message);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
@@ -739,15 +822,97 @@ router.get('/org/archived-messages', authenticate, async (req, res) => {
     const orgId = req.user.org_msg_id; // Organization's message ID
 
     try {
+        const options = {
+            headers: { Authorization: `Bearer ${req.token}` },
+            timeout: 10000
+        };
+
+        // Fetch all users and organizations from the external API using axios
+        const [allUsersResponse, allOrganizationsResponse] = await Promise.all([
+            fetchWithRetry('https://api.fyndah.com/api/v1/users/all', options),
+            fetchWithRetry('https://api.fyndah.com/api/v1/organization', options)
+        ]);
+
+        const allUsers = allUsersResponse.data;
+        const allOrganizations = allOrganizationsResponse.data;
+
+        // Create maps for quick lookup
+        const userMap = allUsers.reduce((map, user) => {
+            map[user.msg_id] = user;
+            return map;
+        }, {});
+
+        const organizationMap = allOrganizations.reduce((map, org) => {
+            map[org.msg_id] = org;
+            return map;
+        }, {});
+
         // Find archived conversations where the organization is a member
         const archivedConversations = await Conversation.find({
             members: orgId,
-            isArchivedFor: true
+            isArchivedFor: true// Ensure isArchivedFor is treated as an array of IDs
         }).sort({ updatedAt: -1 });
 
-        res.status(200).json(archivedConversations);
+        if (!archivedConversations || archivedConversations.length === 0) {
+            return res.status(404).json({ error: 'No conversations found for this organization' });
+        }
+
+        // Find unread messages for the recipient
+        const unreadMessages = await Message.find({ recipient: orgId, isReadByRecipient: false });
+
+        // Group unread messages by conversation ID and count them
+        const unreadMessagesByConversation = unreadMessages.reduce((acc, message) => {
+            const { conversationId } = message;
+            if (!acc[conversationId]) {
+                acc[conversationId] = 0;
+            }
+            acc[conversationId]++;
+            return acc;
+        }, {});
+
+        // Map conversations to include member names, logos, profile photo paths and unread messages count dynamically
+        const results = await Promise.all(archivedConversations.map(async (convo) => {
+            // Ensure the organization's ID
+            const organizationId = orgId;
+
+            // Find the index of the organization in the members array
+            const organizationIndex = convo.members.findIndex(member => member === organizationId);
+
+            // Ensure the other member's ID is at index 1
+            if (organizationIndex !== -1 && convo.members.length > 1) {
+                // Swap the members so that the other member is at index 1
+                const otherMemberIndex = organizationIndex === 0 ? 1 : 0;
+                [convo.members[1], convo.members[otherMemberIndex]] = [convo.members[otherMemberIndex], convo.members[1]];
+            }
+
+            // Find last message for the conversation
+            const lastMessage = await Message.findOne({ conversationId: convo._id })
+                .sort({ createdAt: -1 })
+                .select('message createdAt');
+
+            return {
+                _id: convo._id,
+                members: await Promise.all(convo.members.map(async member => {
+                    const memberInfo = await getNameById(member, userMap, organizationMap);
+                    return {
+                        id: member,
+                        name: memberInfo.name,
+                        profilePhotoPath: memberInfo.profilePhotoPath,
+                        logo: memberInfo.logo
+                    };
+                })),
+                updatedAt: convo.updatedAt,
+                lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
+                unreadCount: unreadMessagesByConversation[convo._id] || 0,
+                __v: convo.__v
+            };
+        }));
+
+        // Return the results
+        res.status(200).json(results);
+
     } catch (err) {
-        console.error('Error retrieving archived conversations:', err);
+        console.error('Error fetching conversations:', err.message);
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
@@ -1038,7 +1203,34 @@ router.get('/messages/category/:category', authenticate, async (req, res) => {
 });
 
 
+const fetchWithRetry = async (url, options, retries = 3) => {
+    for (let i = 0; i < retries; i++) {
+        try {
+            const response = await axios.get(url, options);
+            return response.data; // Assuming response is JSON
+        } catch (error) {
+            console.error(`Attempt ${i + 1} failed: ${error.message}`);
+            if (i === retries - 1) throw error;
+        }
+    }
+};
 
+// Function to get name by msg_id from userMap or organizationMap
+const getNameById = (id, userMap, organizationMap) => {
+    if (userMap[id]) {
+        return {
+            name: userMap[id].username,
+            profilePhotoPath: userMap[id].profile_photo_path
+        };
+    } else if (organizationMap[id]) {
+        return {
+            name: organizationMap[id].org_name,
+            logo: organizationMap[id].logo
+        };
+    } else {
+        return { name: 'Unknown' };
+    }
+};
 
 
 module.exports = router;
