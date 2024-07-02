@@ -169,7 +169,8 @@ router.post('/send-message/org/:conversationId', authenticate, async (req, res) 
         io.to(conversationId).emit('receiveMessage', { senderId, message });
 
         // Emit a notification to the recipient
-        io.to(recipientId).emit('notification', { message: `New message from ${req.user.username}: ${message}` });
+        io.to(recipientId).emit('notification',
+         { message: `New message from ${req.user.username}: ${message}` });
 
         // Update conversation metadata
         conversation.lastMessage = savedMessage._id;
