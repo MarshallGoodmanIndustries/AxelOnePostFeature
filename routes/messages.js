@@ -159,9 +159,10 @@ router.post('/send-message/org/:conversationId', authenticate, async (req, res) 
         const savedMessage = await newMessage.save();
 
           // Remove soft delete flags for recipient
-          if (recipientId === conversation.members[0]) {
-            conversation.deletedFor = null;
-        } 
+          const recipientIndex = conversation.deletedFor.indexOf(recipientId);
+          if (recipientIndex !== -1) {
+              conversation.deletedFor.splice(recipientIndex, 1);
+          }
 
         const io = req.io;
 
