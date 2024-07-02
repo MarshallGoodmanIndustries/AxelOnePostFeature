@@ -5,36 +5,9 @@ const Message = require('../models/message');
 const Conversation = require('../models/conversations');
 const authenticate = require('../middleware/authenticator');
 const transporter = require('../utils/nodemailer');
-// Middleware to exclude soft deleted conversations and messages
-async function excludeSoftDeleted(req, res, next) {
-    try {
-        const userId = req.user.msg_id;
-
-        req.userId = userId;
-
-        next();
-    } catch (error) {
-        console.error('Error excluding soft deleted:', error);
-        res.status(500).json({ error: 'Something went wrong' });
-    }
-}
-
-// Middleware to exclude soft deleted conversations and messages for organizations
-async function excludeSoftDeletedForOrg(req, res, next) {
-    try {
-        const orgId = req.user.org_msg_id;
-
-        req.orgId = orgId;
-
-        next();
-    } catch (error) {
-        console.error('Error excluding soft deleted for organizations:', error);
-        res.status(500).json({ error: 'Something went wrong' });
-    }
-}
+const {excludeSoftDeleted, excludeSoftDeletedForOrg, fetchWithRetry, getNameById} = require("../utils/fetchWithRetry");
 
 // Route to get messages of a conversation excluding soft deleted ones
-
 router.get('/:conversationId', authenticate, excludeSoftDeleted, async (req, res) => {
     try {
         const { conversationId } = req.params;
@@ -44,19 +17,22 @@ router.get('/:conversationId', authenticate, excludeSoftDeleted, async (req, res
 
         const messages = await Message.find({ 
             conversationId,
-            $or: [
-                { deletedForSender: { $ne: userId } },
-                { deletedForRecipient: { $ne: userId } }
-            ] 
+            deletedFor: { $ne: userId }
         }).sort({ createdAt: 1 });
 
+        let response = messages;
+
         if (messages.length === 0) {
-            console.log('No messages found for conversationId:', conversationId);
+            const welcomeMessage = {
+                message: 'Start a New Conversation'
+            };
+            response = [welcomeMessage];
         } else {
             console.log('Messages found:', messages);
         }
 
-        res.json(messages);
+        res.status(200).json(response);
+
     } catch (err) {
         console.error('Error fetching messages:', err);
         res.status(500).json({ error: 'Something went wrong' });
@@ -73,20 +49,23 @@ router.get('/orgmessages/:conversationId', authenticate, excludeSoftDeletedForOr
 
         const messages = await Message.find({ 
             conversationId,
-            $or: [
-                { deletedForSender: { $ne: orgId } },
-                { deletedForRecipient: { $ne: orgId } }
-            ]
+            deletedFor: { $ne: orgId }
         }).sort({ createdAt: 1 });
 
+        let response = messages;
 
         if (messages.length === 0) {
             console.log('No messages found for conversationId:', conversationId);
+            const welcomeMessage = {
+                message: 'Start a New Conversation'
+            };
+            response = [welcomeMessage];
         } else {
             console.log('Messages found:', messages);
         }
 
-        res.json(messages);
+        res.status(200).json(response);
+        
     } catch (err) {
         console.error('Error fetching messages:', err);
         res.status(500).json({ error: 'Something went wrong' });
@@ -181,10 +160,8 @@ router.post('/send-message/org/:conversationId', authenticate, async (req, res) 
 
           // Remove soft delete flags for recipient
           if (recipientId === conversation.members[0]) {
-            conversation.deletedForSender = null;
-        } else if (recipientId === conversation.members[1]) {
-            conversation.deletedForRecipient = null;
-        }
+            conversation.deletedFor = null;
+        } 
 
         const io = req.io;
 
@@ -739,6 +716,15 @@ router.get('/user/archived-messages', authenticate, async (req, res) => {
             return acc;
         }, {});
 
+         // Calculate the total number of archived conversations with unread messages
+         let totalArchivedWithUnread = 0;
+         archivedConversations.forEach(convo => {
+             if (unreadMessagesByConversation[convo._id]) {
+                 totalArchivedWithUnread++;
+             }
+         });
+
+
         // Map conversations to include member names, logos, and profile photo paths dynamically
         const results = await Promise.all(archivedConversations.map(async (convo) => {
             // Ensure the logged-in user's ID
@@ -776,6 +762,7 @@ router.get('/user/archived-messages', authenticate, async (req, res) => {
                 updatedAt: convo.updatedAt,
                 lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
                 unreadCount: unreadMessagesByConversation[convo._id] || 0,
+                totalArchivedWithUnread,
                 __v: convo.__v
             };
         }));
@@ -870,6 +857,14 @@ router.get('/org/archived-messages', authenticate, async (req, res) => {
             return acc;
         }, {});
 
+        // Calculate the total number of archived conversations with unread messages
+        let totalArchivedWithUnread = 0;
+        archivedConversations.forEach(convo => {
+            if (unreadMessagesByConversation[convo._id]) {
+                totalArchivedWithUnread++;
+            }
+        });
+
         // Map conversations to include member names, logos, profile photo paths and unread messages count dynamically
         const results = await Promise.all(archivedConversations.map(async (convo) => {
             // Ensure the organization's ID
@@ -904,6 +899,7 @@ router.get('/org/archived-messages', authenticate, async (req, res) => {
                 updatedAt: convo.updatedAt,
                 lastMessage: lastMessage ? { message: lastMessage.message, createdAt: lastMessage.createdAt } : null,
                 unreadCount: unreadMessagesByConversation[convo._id] || 0,
+                totalArchivedWithUnread,
                 __v: convo.__v
             };
         }));
@@ -1057,28 +1053,21 @@ router.delete('/delete/conversation/:conversationId', authenticate, async (req, 
             return res.status(404).json({ error: 'Conversation not found' });
         }
 
-        // Determine if the user is the sender or recipient
         const isMember = conversation.members.includes(userId);
         if (!isMember) {
             return res.status(403).json({ error: 'You are not authorized to delete this conversation' });
         }
 
-       // Add orgId to the deletedFor array
-       conversation.deletedFor.push(userId);
-       await conversation.save();
+        // Add userId to the deletedFor array of the conversation
+        if (!conversation.deletedFor.includes(userId)) {
+            conversation.deletedFor.push(userId);
+            await conversation.save();
+        }
 
-       // Add orgId to the deletedFor array in all messages in this conversation
-       await Message.updateMany(
-           { conversationId },
-           { $addToSet: { deletedFor: userId } }
-       );
-        await conversation.save();
-
-        // Soft delete the messages for the sender or recipient
-        const updateField = conversation.members[0] === userId ? 'deletedForSender' : 'deletedForRecipient';
+        // Add userId to the deletedFor array in all messages in this conversation
         await Message.updateMany(
             { conversationId },
-            { $set: { [updateField]: userId } }
+            { $addToSet: { deletedFor: userId } }
         );
 
         res.status(200).json({ message: 'Conversation and its messages soft deleted successfully' });
@@ -1201,36 +1190,5 @@ router.get('/messages/category/:category', authenticate, async (req, res) => {
         res.status(500).json({ error: 'Something went wrong' });
     }
 });
-
-
-const fetchWithRetry = async (url, options, retries = 3) => {
-    for (let i = 0; i < retries; i++) {
-        try {
-            const response = await axios.get(url, options);
-            return response.data; // Assuming response is JSON
-        } catch (error) {
-            console.error(`Attempt ${i + 1} failed: ${error.message}`);
-            if (i === retries - 1) throw error;
-        }
-    }
-};
-
-// Function to get name by msg_id from userMap or organizationMap
-const getNameById = (id, userMap, organizationMap) => {
-    if (userMap[id]) {
-        return {
-            name: userMap[id].username,
-            profilePhotoPath: userMap[id].profile_photo_path
-        };
-    } else if (organizationMap[id]) {
-        return {
-            name: organizationMap[id].org_name,
-            logo: organizationMap[id].logo
-        };
-    } else {
-        return { name: 'Unknown' };
-    }
-};
-
 
 module.exports = router;
