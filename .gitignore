@@ -2,7 +2,7 @@
 node_modules/
 migration.js
 testScript.js
-seedPostScript/
+seedPostScript.js
 seed.json
 file.html
 index.html
