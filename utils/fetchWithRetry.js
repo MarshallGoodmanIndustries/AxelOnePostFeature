@@ -1,19 +1,5 @@
 const axios = require('axios');
 
-const refreshToken = async (oldToken) => {
-    try {
-        const response = await fetchWithRetry('https://api.fyndah.com/api/v1/auth/refresh', {
-            method: 'POST',
-            headers: { Authorization: `Bearer ${oldToken}` },
-            timeout: 10000
-        });
-        return response.data.token;
-    } catch (error) {
-        console.error('Error refreshing token:', error.message);
-        throw new Error('Unable to refresh token');
-    }
-};
-
 const fetchWithRetry = async (url, options, retries = 3) => {
     for (let i = 0; i < retries; i++) {
         try {
@@ -74,7 +60,6 @@ async function excludeSoftDeletedForOrg(req, res, next) {
 
 module.exports = {
     fetchWithRetry,
-    refreshToken,
     getNameById,
     excludeSoftDeleted,
     excludeSoftDeletedForOrg

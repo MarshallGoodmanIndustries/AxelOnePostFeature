@@ -360,11 +360,15 @@ router.post('/webhook/user-registered', async (req, res) => {
             recipient: msg_id,
             senderId: 'admin_msg_id',
             message: `
-                Welcome to Fyndah, ${correctUsername} 🎉
-                We're thrilled to have you on board. Start exploring local businesses and services right away. Don’t forget to complete your profile to get the best recommendations and make the most of your Fyndah experience.
-                Need to setup your Business account? Go to "Create business profile" - https://fyndah.com/dashboard/createbuisness
-                Need help? Check out our support resources or reach out to us anytime. Happy discovering!
-                The Fyndah Team 
+            <p>
+                    Welcome to Fyndah, ${correctUsername}  🎉 <br />
+                    We're thrilled to have you on board. Start exploring local businesses and services right away. 
+                    Don’t forget to complete your profile to get the best recommendations and make the most of your Fyndah experience. <br />
+                    Need to setup your Business account? 
+                    Go to <span className="text-blue-500">"Create business profile"</span> - <a className="text-red-500" href="https://fyndah.com/dashboard/createbuisness">https://fyndah.com/dashboard/createbuisness</a> <br />
+                    Need help? Check out our support resources or reach out to us anytime. Happy discovering! <br />
+                    The Fyndah Team 
+            </p>
                  `,
             createdAt: new Date()
         });
@@ -406,20 +410,24 @@ router.post('/webhook/org-registered', async (req, res) => {
             recipient: org_msg_id,
             senderId: 'admin_msg_id',
             message: `
-            Hello ${org_name},
-
-            Welcome to Fyndah! 🚀 We’re excited to help you connect with local customers.
-            
+            <p>
+            Welcome to Fyndah  ${org_name} 🚀 </br>
+            We’re excited to help you connect with local customers.
+            </br>
             Set up your business profile to get started. 
             https://fyndah.com/businessDashboard/${org_id}/${org_name}/business-profile   
-
+            </br>
             Make sure to fund your wallet, check out our lead management tools and advertising opportunities to maximize your reach.
-             Fund Wallet: https://fyndah.com/businessDashboard/${org_id}/${org_name}/wallet
-             Leads: https://fyndah.com/businessDashboard/${org_id}/${org_name}/leads
-            
-            Need tips? We’ve got you covered with our resources and support. Let’s grow together!
-            
+            </br>
+            <span className="text-blue-500">Fund Wallet:</span>  <a className="text-red-500" href="https://fyndah.com/businessDashboard/${org_id}/${org_name}/wallet"> https://fyndah.com/businessDashboard/${org_id}/${org_name}/wallet </a>
+             </br>
+             <span className="text-blue-500">Leads:</span> <a className="text-red-500" href="https://fyndah.com/businessDashboard/${org_id}/${org_name}/leads"> https://fyndah.com/businessDashboard/${org_id}/${org_name}/leads </a>
+            </br>
+            Need tips? We’ve got you covered with our resources and support. 
+            Let’s grow together!
+            </br>
              The Fyndah Team
+             </p>
                  `,
             createdAt: new Date()
         });
