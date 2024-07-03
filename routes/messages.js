@@ -24,7 +24,7 @@ router.get('/:conversationId', authenticate, excludeSoftDeleted, async (req, res
 
         if (messages.length === 0) {
             const welcomeMessage = {
-                message: 'Start a New Conversation'
+                message: 'Start a Chat'
             };
             response = [welcomeMessage];
         } else {
@@ -57,7 +57,7 @@ router.get('/orgmessages/:conversationId', authenticate, excludeSoftDeletedForOr
         if (messages.length === 0) {
             console.log('No messages found for conversationId:', conversationId);
             const welcomeMessage = {
-                message: 'Start a New Conversation'
+                message: 'Start a Chat'
             };
             response = [welcomeMessage];
         } else {
